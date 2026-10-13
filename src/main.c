@@ -28,6 +28,7 @@
 #include "net_amiga.h"
 #include "plat_amiga.h"
 #include "session.h"
+#include "state.h"
 #include "tz.h"
 
 size_t __stack = 65536;                 /* OpenSSL needs more than the Shell default */
@@ -263,6 +264,36 @@ static long ticks_since(const struct DateStamp *t0)
            (t1.ds_Minute - t0->ds_Minute) * 60L * TICKS_PER_SECOND + (t1.ds_Tick - t0->ds_Tick);
 }
 
+/* Write a small sync state to T:, read it back, delete it: the streamed, safely
+ * replaced files of plat_amiga.c on a real file system. */
+static int test_state_file(void)
+{
+    static State st;
+    static const char path[] = "T:AmiDrive-test.state";
+    StEntry e, *f;
+    int rc, ok;
+
+    state_init(&st);
+    strcpy(st.root_id, "ROOT!1");
+    memset(&e, 0, sizeof(e));
+    e.id = "FILE!2";
+    e.parent = "ROOT!1";
+    e.name = "tab\tname";
+    e.lname = "name";
+    e.size = 123456;
+    ok = state_put(&st, &e) != NULL && state_save(&st, path) == AD_OK &&
+         state_save(&st, path) == AD_OK;                /* the second one replaces */
+    state_free(&st);
+    rc = state_load(&st, path);
+    f = state_find(&st, "FILE!2");
+    ok = ok && rc == AD_OK && st.count == 1 && f && f->size == 123456 &&
+         strcmp(f->name, "tab\tname") == 0 && strcmp(st.root_id, "ROOT!1") == 0;
+    state_free(&st);
+    plat_delete_file(path);
+    Printf("State file (%s): %s\n\n", (LONG)path, (LONG)(ok ? "OK" : "FAILED"));
+    return ok ? AD_OK : AD_ERR;
+}
+
 static int cmd_test(const char *host, const char *tzsrc)
 {
     char iso[24];
@@ -280,6 +311,8 @@ static int cmd_test(const char *host, const char *tzsrc)
            (LONG)((off < 0 ? -off : off) / 60), (LONG)((off < 0 ? -off : off) % 60));
     tz_format_iso8601(utc, iso);
     Printf("UTC:       %s\n\n", (LONG)iso);
+    if (test_state_file() != AD_OK)
+        return RETURN_ERROR;
 
     if ((rc = start_network()) != RETURN_OK)
         return rc;

@@ -79,7 +79,8 @@ dziennik `.AmiDrive/AmiDrive.log`).
 
 Plik stanu zapisywany atomowo (zapis do pliku tymczasowego, potem rename):
 - ostatni `deltaLink`,
-- dla każdego pliku: id elementu OneDrive, ścieżka lokalna, ścieżka zdalna, eTag, rozmiar, data modyfikacji.
+- dla każdego pliku: id elementu OneDrive, id rodzica, nazwa zdalna i lokalna, cTag/eTag, rozmiar,
+  data modyfikacji (zdalna i lokalna). Ścieżki składane z łańcucha rodziców – delta nie podaje ścieżek.
 
 ## Proponowane moduły
 
@@ -109,7 +110,7 @@ Plik stanu zapisywany atomowo (zapis do pliku tymczasowego, potem rename):
 - Prawdziwa A1200 przez AmiAgent, katalog **`Work:AmiDrive`**. `tools/amiga_remote.py` uruchamiać
   z Git Bash / PowerShell (Python ze Sklepu Windows nie działa z powłoki MSYS2):
   `push`, `run "Work:AmiDrive/AmiDrive TEST"`, `push --local build/amiga/AmiDriveTests` + `run`.
-- Moduły przenośne (`http`, `json`, `fsmap`, `tz`, `session`, `config`, `auth`, `graph`) bez
+- Moduły przenośne (`http`, `json`, `fsmap`, `tz`, `session`, `config`, `auth`, `graph`, `state`) bez
   nagłówków Amigi; system tylko przez `net.h` i `plat.h`. Zależne od Amigi: `main.c`,
   `net_amiga.c` (`net.c` z listy wyżej), `plat_amiga.c`. W testach atrapy `tests/fake_net.c`
   (scenariusz odpowiedzi na każde połączenie) i `tests/fake_plat.c` (zegar, pliki w pamięci). Każdą zmianę modułu przenośnego testować na PC

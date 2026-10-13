@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include <exec/types.h>
+#include <exec/memory.h>
 #include <dos/dos.h>
 #include <dos/var.h>
 #include <libraries/locale.h>
@@ -122,6 +123,97 @@ int plat_write_file(const char *path, const char *data, long len)
      * If we are stopped in between, "<path>.new" holds the complete new version. */
     DeleteFile((STRPTR)path);
     return Rename(tmp, (STRPTR)path) ? AD_OK : AD_ERR;
+}
+
+struct PlatFile {
+    BPTR fh;
+    int  write, failed;
+    char path[300];                     /* the final name; the open file is "<path>.new" */
+};
+
+static PlatFile *new_file(const char *path, int write)
+{
+    PlatFile *f;
+
+    if (strlen(path) + 5 > sizeof(f->path))
+        return NULL;
+    if (!(f = AllocVec(sizeof(*f), MEMF_ANY | MEMF_CLEAR)))
+        return NULL;
+    strcpy(f->path, path);
+    f->write = write;
+    return f;
+}
+
+PlatFile *plat_open_read(const char *path)
+{
+    char tmp[300];
+    PlatFile *f = new_file(path, 0);
+
+    if (!f)
+        return NULL;
+    if (!(f->fh = Open((STRPTR)path, MODE_OLDFILE))) {
+        strcpy(tmp, path);
+        strcat(tmp, ".new");
+        f->fh = Open(tmp, MODE_OLDFILE);
+    }
+    if (!f->fh) {
+        FreeVec(f);
+        return NULL;
+    }
+    return f;
+}
+
+PlatFile *plat_open_write(const char *path)
+{
+    char tmp[300];
+    PlatFile *f = new_file(path, 1);
+
+    if (!f)
+        return NULL;
+    strcpy(tmp, path);
+    strcat(tmp, ".new");
+    if (!(f->fh = Open(tmp, MODE_NEWFILE))) {
+        FreeVec(f);
+        return NULL;
+    }
+    return f;
+}
+
+long plat_read(PlatFile *f, void *buf, long len)
+{
+    long n = Read(f->fh, buf, len);
+    return n < 0 ? AD_ERR : n;
+}
+
+int plat_write(PlatFile *f, const void *buf, long len)
+{
+    if (f->failed || Write(f->fh, (APTR)buf, len) != len) {
+        f->failed = 1;
+        return AD_ERR;
+    }
+    return AD_OK;
+}
+
+int plat_close(PlatFile *f, int commit)
+{
+    char tmp[300];
+    int rc = AD_OK;
+
+    if (!Close(f->fh))
+        f->failed = 1;
+    if (f->write) {
+        strcpy(tmp, f->path);
+        strcat(tmp, ".new");
+        if (!commit || f->failed) {
+            DeleteFile(tmp);
+            rc = commit ? AD_ERR : AD_OK;
+        } else {
+            DeleteFile(f->path);        /* see plat_write_file */
+            rc = Rename(tmp, f->path) ? AD_OK : AD_ERR;
+        }
+    }
+    FreeVec(f);
+    return rc;
 }
 
 int plat_delete_file(const char *path)

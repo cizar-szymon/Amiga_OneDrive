@@ -20,6 +20,18 @@ long plat_read_file(const char *path, char *buf, long size);
 /* Replace a file safely: write "<path>.new", then swap it in. Returns AD_OK or AD_ERR. */
 int plat_write_file(const char *path, const char *data, long len);
 
+/* Streamed files, for data too large for one buffer (the sync state).
+ * plat_open_read() falls back to "<path>.new" like plat_read_file(); NULL when missing.
+ * plat_open_write() writes "<path>.new"; plat_close(f, 1) swaps it in like
+ * plat_write_file(), plat_close(f, 0) throws it away. */
+typedef struct PlatFile PlatFile;
+
+PlatFile *plat_open_read(const char *path);
+PlatFile *plat_open_write(const char *path);
+long plat_read(PlatFile *f, void *buf, long len);       /* bytes, 0 at the end, AD_ERR */
+int  plat_write(PlatFile *f, const void *buf, long len); /* AD_OK or AD_ERR */
+int  plat_close(PlatFile *f, int commit);                /* AD_OK or AD_ERR */
+
 int plat_delete_file(const char *path);
 
 /* Create a directory if it does not exist yet. Returns AD_OK or AD_ERR. */

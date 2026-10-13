@@ -41,6 +41,7 @@ void test_session(void);
 void test_config(void);
 void test_auth(void);
 void test_graph(void);
+void test_state(void);
 
 /* fake_net.c */
 struct NetConn;
@@ -55,6 +56,7 @@ extern char fake_host[128];
 extern unsigned long fake_time;
 extern long fake_slept;
 extern int fake_break_in;
+extern int fake_write_fail;
 
 /* tests.c: "HTTP/1.1 <status> X\r\nContent-Length: n\r\n\r\n<body>" (static ring of buffers) */
 const char *http_resp(int status, const char *extra_headers, const char *body);

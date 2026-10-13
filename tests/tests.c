@@ -42,6 +42,7 @@ int main(void)
     test_config();
     test_auth();
     test_graph();
+    test_state();
 
     printf("%d checks, %d failed\n", tests_run, tests_failed);
     return tests_failed ? 1 : 0;

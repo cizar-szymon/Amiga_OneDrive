@@ -21,14 +21,15 @@
 | `graph.c`: `/me/drive` | ✅ testy |
 | `graph.c`: element po ścieżce, delta i children stronami (`nextLink`/`deltaLink`), pobieranie strumieniowe (302 → serwer plików), ponowienia 429/5xx, 404/410 | ✅ testy + A1200 (atrapy), ⏳ prawdziwe konto |
 | Start z ikony (Tool Types, `WINDOW`, dziennik), praca w tle co `INTERVAL` | ⏳ |
-| `state.c`: baza stanu, zapis atomowy | ⏳ |
+| `state.c`: baza stanu po `id` (ścieżki z łańcucha rodziców), plik tekstowy zapisywany strumieniowo do `.new` i podmieniany, linia końcowa | ✅ testy + A1200 (`AmiDrive TEST` zapisuje i czyta stan w `T:`) |
+| `plat`: strumieniowe pliki (`plat_open_read/write`, `plat_close` z podmianą) | ✅ A1200 |
 | `sync.c`: etap 1 – pobieranie zmian | ⏳ |
 | Etap 2: wysyłanie, sesje wysyłania, konflikty | ⏳ |
 
 ## Wyniki testów
 
-- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 707 sprawdzeń, 0 błędów.
-- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 707 sprawdzeń, 0 błędów.
+- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1081 sprawdzeń, 0 błędów.
+- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1081 sprawdzeń, 0 błędów.
 - A1200 `LOGIN` z fikcyjnym `CLIENTID`: odpowiedź Microsoftu `AADSTS700038 ... is not a valid
   application identifier` – zapytanie dochodzi i jest poprawne, brakuje tylko rejestracji aplikacji.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
@@ -77,6 +78,14 @@
   410 → `AD_ERR_GONE` (pełna delta od nowa), 401 → `AD_ERR_AUTH` (odświeżyć token, powtórzyć).
 - **Pobieranie**: `/content` odpowiada 302 na adres serwera plików (inny host, osobna sesja
   z keep-alive). Tam **bez tokenu** – adres sam daje dostęp; tylko `https://`, port 443.
+- **Stan** (`state.c`): wpis = `id`, `parent`, nazwa zdalna (UTF-8) i lokalna, `cTag`, `eTag`,
+  rozmiar, czas zdalny (UTC) i czas pliku lokalnego po synchronizacji (do wykrywania zmian na
+  Amidze w etapie 2). **Bez pełnych ścieżek** – zmiana nazwy folderu w delcie przychodzi tylko
+  dla samego folderu, więc ścieżki składane z rodziców (`state_local_path`/`state_remote_path`).
+  Wpis to jeden blok `malloc` (ok. 100–150 bajtów), tablica mieszająca 512 kubełków; 5000
+  plików ≈ 0,7 MB. Plik tekstowy (`STATE_MAGIC "AmiDrive state 1"`), pola rozdzielone
+  tabulatorem z ucieczkami `\t \n \r \\`, na końcu `end <liczba>`: plik ucięty lub uszkodzony
+  → pusty stan i pełna delta (nie ryzykujemy błędnego stanu).
 - Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.
 
 ## Znane ograniczenia / do zrobienia
