@@ -11,6 +11,7 @@
 #include <proto/locale.h>
 
 #include "amidrive.h"
+#include "fsmap.h"
 #include "plat_amiga.h"
 
 extern struct LocaleBase *LocaleBase;   /* main.c, may be NULL */
@@ -179,6 +180,19 @@ PlatFile *plat_open_write(const char *path)
     return f;
 }
 
+PlatFile *plat_create(const char *path)
+{
+    PlatFile *f = new_file(path, 2);
+
+    if (!f)
+        return NULL;
+    if (!(f->fh = Open((STRPTR)path, MODE_NEWFILE))) {
+        FreeVec(f);
+        return NULL;
+    }
+    return f;
+}
+
 long plat_read(PlatFile *f, void *buf, long len)
 {
     long n = Read(f->fh, buf, len);
@@ -201,7 +215,12 @@ int plat_close(PlatFile *f, int commit)
 
     if (!Close(f->fh))
         f->failed = 1;
-    if (f->write) {
+    if (f->write == 2) {                /* plat_create: written in place */
+        if (!commit || f->failed) {
+            DeleteFile(f->path);
+            rc = commit ? AD_ERR : AD_OK;
+        }
+    } else if (f->write) {
         strcpy(tmp, f->path);
         strcat(tmp, ".new");
         if (!commit || f->failed) {
@@ -214,6 +233,66 @@ int plat_close(PlatFile *f, int commit)
     }
     FreeVec(f);
     return rc;
+}
+
+int plat_file_info(const char *path, PlatInfo *info)
+{
+    struct FileInfoBlock *fib;
+    BPTR lock;
+    int rc = AD_ERR;
+
+    if (!(lock = Lock((STRPTR)path, ACCESS_READ)))
+        return AD_ERR;
+    if ((fib = AllocDosObject(DOS_FIB, NULL)) != NULL) {
+        if (Examine(lock, fib)) {
+            info->size = (unsigned long)fib->fib_Size;
+            info->date = (unsigned long)fib->fib_Date.ds_Days * 86400UL +
+                         (unsigned long)fib->fib_Date.ds_Minute * 60UL +
+                         (unsigned long)(fib->fib_Date.ds_Tick / TICKS_PER_SECOND);
+            info->dir = fib->fib_DirEntryType > 0;
+            rc = AD_OK;
+        }
+        FreeDosObject(DOS_FIB, fib);
+    }
+    UnLock(lock);
+    return rc;
+}
+
+int plat_set_date(const char *path, unsigned long local_secs)
+{
+    struct DateStamp ds;
+
+    ds.ds_Days = (LONG)(local_secs / 86400UL);
+    ds.ds_Minute = (LONG)((local_secs % 86400UL) / 60UL);
+    ds.ds_Tick = (LONG)(local_secs % 60UL) * TICKS_PER_SECOND;
+    return SetFileDate((STRPTR)path, &ds) ? AD_OK : AD_ERR;
+}
+
+int plat_rename(const char *from, const char *to)
+{
+    return Rename((STRPTR)from, (STRPTR)to) ? AD_OK : AD_ERR;
+}
+
+int plat_name_limit(const char *path)
+{
+    struct InfoData *id;
+    BPTR lock;
+    int limit = FS_MAXNAME_LONG;
+
+    if (!(lock = Lock((STRPTR)path, ACCESS_READ)))
+        return FS_MAXNAME_OFS;
+    if ((id = AllocVec(sizeof(*id), MEMF_ANY)) != NULL) {
+        if (Info(lock, id)) {
+            ULONG t = (ULONG)id->id_DiskType;
+            /* OFS / FFS ("DOS\0".."DOS\5"): 30 characters; FFS2 ("DOS\6", "DOS\7"),
+             * SFS, PFS and the rest: long names */
+            if ((t & 0xFFFFFF00UL) == 0x444F5300UL && (t & 0xFF) < 6)
+                limit = FS_MAXNAME_OFS;
+        }
+        FreeVec(id);
+    }
+    UnLock(lock);
+    return limit;
 }
 
 int plat_delete_file(const char *path)

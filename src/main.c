@@ -29,6 +29,7 @@
 #include "plat_amiga.h"
 #include "session.h"
 #include "state.h"
+#include "sync.h"
 #include "tz.h"
 
 size_t __stack = 65536;                 /* OpenSSL needs more than the Shell default */
@@ -52,7 +53,8 @@ extern struct Library *SocketBase;      /* net_amiga.c */
 
 /* large structures: static, not on the stack */
 static Config cfg;
-static Session login_sess, graph_sess;
+static Session login_sess, graph_sess, dl_sess;
+static State state;
 static AuthTokens tokens;
 static AuthDevice device;
 static char text[2048];
@@ -264,6 +266,119 @@ static long ticks_since(const struct DateStamp *t0)
            (t1.ds_Minute - t0->ds_Minute) * 60L * TICKS_PER_SECOND + (t1.ds_Tick - t0->ds_Tick);
 }
 
+/* ---- synchronisation ------------------------------------------------------------ */
+
+static const char *sync_token(void *ud, int force, int *rc, char *err, int errsize)
+{
+    AuthApp a = app();
+
+    (void)ud;
+    *rc = auth_ensure(&login_sess, &a, &tokens, CFG_TOKEN_FILE, force, err, errsize);
+    return *rc == AD_OK ? tokens.access : NULL;
+}
+
+static void sync_log(void *ud, const char *msg)
+{
+    (void)ud;
+    Printf("  %s\n", (LONG)msg);
+}
+
+/* path + "/" + name ("/" left out after ':' or '/'); path has room for it */
+static void add_name(char *path, const char *name)
+{
+    size_t n = strlen(path);
+
+    if (n > 0 && path[n - 1] != ':' && path[n - 1] != '/')
+        strcat(path, "/");
+    strcat(path, name);
+}
+
+static void print_time(void)
+{
+    char iso[24];
+
+    tz_format_iso8601(plat_local_now(), iso);
+    iso[10] = ' ';
+    iso[16] = '\0';                     /* "YYYY-MM-DD HH:MM" */
+    Printf("%s ", (LONG)iso);
+}
+
+/* Synchronise now (once) or every INTERVAL minutes until Ctrl-C. */
+static int cmd_sync(int once)
+{
+    static char remote[CFG_PATH_SIZE * 2], state_file[CFG_PATH_SIZE + 16];
+    FsCharset cs = cfg.charset[5] == '2' ? FS_LATIN2 : FS_LATIN1;
+    SyncConfig sc;
+    SyncStats ss;
+    char err[200];
+    int rc;
+
+    if (auth_load(&tokens, CFG_TOKEN_FILE) != AD_OK) {
+        Printf("Not signed in: run %s LOGIN first\n", (LONG)AMIDRIVE_NAME);
+        return RETURN_WARN;
+    }
+    if (fs_to_utf8(cs, cfg.remote, remote, sizeof(remote)) < 0) {
+        Printf("REMOTE too long\n");
+        return RETURN_ERROR;
+    }
+    /* STATE=dir, else <LOCAL>/.AmiDrive; the file in it is "state" */
+    strcpy(state_file, cfg.state[0] ? cfg.state : cfg.local);
+    if (!cfg.state[0])
+        add_name(state_file, SYNC_STATE_DIR);
+    add_name(state_file, "state");
+    if ((rc = start_network()) != RETURN_OK)
+        return rc;
+
+    memset(&sc, 0, sizeof(sc));
+    sc.graph = &graph_sess;
+    sc.dl = &dl_sess;
+    sc.local = cfg.local;
+    sc.remote = remote;
+    sc.state_file = state_file;
+    sc.charset = cs;
+    sc.tz = plat_timezone();
+    sc.token = sync_token;
+    sc.log = sync_log;
+
+    state_init(&state);
+    if (state_load(&state, state_file) == AD_ERR_PROTO)
+        Printf("Warning: %s is damaged, the whole folder will be read again\n", (LONG)state_file);
+
+    for (;;) {
+        plat_make_dir(cfg.local);
+        sc.maxname = plat_name_limit(cfg.local);
+        print_time();
+        Printf("Checking OneDrive %s -> %s\n", (LONG)cfg.remote, (LONG)cfg.local);
+        rc = sync_run(&sc, &state, &ss, err, sizeof(err));
+        /* the connections are not kept for minutes of waiting */
+        sess_close(&graph_sess);
+        sess_close(&dl_sess);
+        sess_close(&login_sess);
+
+        if (rc == AD_OK) {
+            if (ss.downloaded + ss.moved + ss.deleted + ss.folders + ss.kept + ss.failed == 0)
+                Printf("  no changes\n");
+            else
+                Printf("  %ld downloaded (%lu KB), %ld moved, %ld deleted, %ld new folders, "
+                       "%ld kept, %ld failed\n", ss.downloaded, (ss.bytes + 1023) / 1024, ss.moved,
+                       ss.deleted, ss.folders, ss.kept, ss.failed);
+        } else {
+            print_rc("  Stopped", rc, err);
+            if (rc == AD_ERR_BREAK || rc == AD_ERR_AUTH || rc == AD_ERR_NOTFOUND)
+                break;
+        }
+        if (once || plat_sleep(cfg.interval * 60) != AD_OK)
+            break;
+    }
+    if (rc == AD_ERR_AUTH)
+        Printf("Sign in again: %s LOGIN\n", (LONG)AMIDRIVE_NAME);
+    if (rc == AD_ERR_BREAK)
+        return RETURN_WARN;
+    if (rc != AD_OK)
+        return RETURN_ERROR;
+    return ss.failed ? RETURN_WARN : RETURN_OK;
+}
+
 /* Write a small sync state to T:, read it back, delete it: the streamed, safely
  * replaced files of plat_amiga.c on a real file system. */
 static int test_state_file(void)
@@ -290,7 +405,27 @@ static int test_state_file(void)
          strcmp(f->name, "tab\tname") == 0 && strcmp(st.root_id, "ROOT!1") == 0;
     state_free(&st);
     plat_delete_file(path);
-    Printf("State file (%s): %s\n\n", (LONG)path, (LONG)(ok ? "OK" : "FAILED"));
+    Printf("State file (%s): %s\n", (LONG)path, (LONG)(ok ? "OK" : "FAILED"));
+    if (!ok)
+        return AD_ERR;
+
+    /* a download: written in place, dated, renamed over nothing, examined */
+    {
+        static const char part[] = "T:" SYNC_PART_NAME, done[] = "T:AmiDrive-test.txt";
+        unsigned long date = 1500000000UL;          /* 2025-07-14 02:40:00 local */
+        PlatFile *pf = plat_create(part);
+        PlatInfo info;
+
+        ok = pf && plat_write(pf, "12345", 5) == AD_OK && plat_close(pf, 1) == AD_OK &&
+             plat_set_date(part, date) == AD_OK && plat_rename(part, done) == AD_OK &&
+             plat_file_info(done, &info) == AD_OK && info.size == 5 && info.date == date &&
+             !info.dir && plat_file_info(part, &info) != AD_OK && plat_file_info("T:", &info) == AD_OK &&
+             info.dir;
+        plat_delete_file(done);
+        Printf("Files (create, date, rename, examine): %s\n", (LONG)(ok ? "OK" : "FAILED"));
+        Printf("Name limit: SYS: %ld, RAM: %ld characters\n\n",
+               (LONG)plat_name_limit("SYS:"), (LONG)plat_name_limit("RAM:"));
+    }
     return ok ? AD_OK : AD_ERR;
 }
 
@@ -365,6 +500,7 @@ int main(void)
     plat_init_timezone(tzsrc, sizeof(tzsrc));
     sess_init(&login_sess, AD_LOGIN_HOST);
     sess_init(&graph_sess, AD_GRAPH_HOST);
+    sess_init(&dl_sess, NULL);             /* host from each download redirect */
 
     rc = load_settings(args, &changed);
     if (rc == RETURN_OK && changed)
@@ -385,14 +521,15 @@ int main(void)
                (LONG)AMIDRIVE_NAME);
         rc = RETURN_WARN;
     } else {
-        Printf("Synchronisation of %s -> %s: not implemented yet\n", (LONG)cfg.remote, (LONG)cfg.local);
-        rc = RETURN_WARN;
+        rc = cmd_sync(args[ARG_ONCE] != 0);
     }
 
     if (plat_break())
         Printf("*** Break\n");
     sess_close(&login_sess);
     sess_close(&graph_sess);
+    sess_close(&dl_sess);
+    state_free(&state);
     memset(&tokens, 0, sizeof(tokens));
     net_cleanup();
     if (LocaleBase)

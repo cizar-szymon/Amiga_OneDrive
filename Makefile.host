@@ -7,9 +7,9 @@ CFLAGS := -std=c99 -Wall -Wextra -pedantic -O1 -g -Isrc
 
 OUT   := build/host/tests
 SRCS  := src/http.c src/json.c src/fsmap.c src/tz.c src/session.c src/config.c src/auth.c \
-         src/graph.c src/state.c \
+         src/graph.c src/state.c src/sync.c \
          tests/tests.c tests/test_http.c tests/test_json.c tests/test_fsmap.c tests/test_tz.c \
-         tests/test_session.c tests/test_config.c tests/test_auth.c tests/test_graph.c tests/test_state.c \
+         tests/test_session.c tests/test_config.c tests/test_auth.c tests/test_graph.c tests/test_state.c tests/test_sync.c \
          tests/fake_net.c tests/fake_plat.c
 HDRS  := $(wildcard src/*.h tests/*.h)
 

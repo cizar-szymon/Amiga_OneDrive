@@ -20,16 +20,18 @@
 | `LOGIN`, `LOGOUT`, `INFO` (właściciel i zajętość OneDrive) | ✅ kod, ⏳ test z prawdziwym kontem |
 | `graph.c`: `/me/drive` | ✅ testy |
 | `graph.c`: element po ścieżce, delta i children stronami (`nextLink`/`deltaLink`), pobieranie strumieniowe (302 → serwer plików), ponowienia 429/5xx, 404/410 | ✅ testy + A1200 (atrapy), ⏳ prawdziwe konto |
-| Start z ikony (Tool Types, `WINDOW`, dziennik), praca w tle co `INTERVAL` | ⏳ |
+| Start z ikony (Tool Types, `WINDOW`, dziennik `.AmiDrive/AmiDrive.log`) | ⏳ |
 | `state.c`: baza stanu po `id` (ścieżki z łańcucha rodziców), plik tekstowy zapisywany strumieniowo do `.new` i podmieniany, linia końcowa | ✅ testy + A1200 (`AmiDrive TEST` zapisuje i czyta stan w `T:`) |
 | `plat`: strumieniowe pliki (`plat_open_read/write`, `plat_close` z podmianą) | ✅ A1200 |
-| `sync.c`: etap 1 – pobieranie zmian | ⏳ |
+| `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 (atrapy), ⏳ prawdziwe konto |
+| `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
+| `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ kod, ⏳ prawdziwe konto |
 | Etap 2: wysyłanie, sesje wysyłania, konflikty | ⏳ |
 
 ## Wyniki testów
 
-- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1081 sprawdzeń, 0 błędów.
-- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1081 sprawdzeń, 0 błędów.
+- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1172 sprawdzeń, 0 błędów.
+- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1172 sprawdzeń, 0 błędów.
 - A1200 `LOGIN` z fikcyjnym `CLIENTID`: odpowiedź Microsoftu `AADSTS700038 ... is not a valid
   application identifier` – zapytanie dochodzi i jest poprawne, brakuje tylko rejestracji aplikacji.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
@@ -86,6 +88,30 @@
   plików ≈ 0,7 MB. Plik tekstowy (`STATE_MAGIC "AmiDrive state 1"`), pola rozdzielone
   tabulatorem z ucieczkami `\t \n \r \\`, na końcu `end <liczba>`: plik ucięty lub uszkodzony
   → pusty stan i pełna delta (nie ryzykujemy błędnego stanu).
+- **Synchronizacja, etap 1** (`sync.c`):
+  - elementy delty stosowane od razu, po kolei (stary stan daje dotychczasową ścieżkę przy
+    przenoszeniu); element, którego folder jeszcze nie przyszedł, czeka do końca strony;
+  - pobieranie do `<katalog>/.AmiDrive.part` (ten sam wolumin, nazwa mieści się w 30 znakach),
+    data pliku = `fileSystemInfo` przeliczona na czas lokalny, potem usunięcie starej wersji
+    i zmiana nazwy (AmigaDOS nie nadpisuje przy `Rename`); rozmiar musi się zgadzać;
+  - **pliki z Amigi nie giną**: plik zmieniony lokalnie (rozmiar lub data inne niż po ostatniej
+    synchronizacji) przy nowej wersji z chmury dostaje nazwę `nazwa-Amiga.ext`, przy usunięciu
+    w chmurze zostaje; folder z czymś w środku zostaje; plik lokalny równy chmurze (rozmiar
+    i data) jest przejmowany bez pobierania – także pierwsza synchronizacja na istniejące pliki
+    i powrót po przerwaniu między podmianą a zapisem stanu;
+  - nazwa, którą trzeba było zmienić (znaki spoza strony kodowej, za długa), zawsze z hashem –
+    nie zderzy się z prawdziwą nazwą tej samej postaci;
+  - **nowy deltaLink tylko po bezbłędnym przejściu**; inaczej następne przejście czyta te same
+    zmiany (ponowne zastosowanie nic nie psuje), więc nieudany plik nie ginie;
+  - błędy sieci, Ctrl-C, odrzucone logowanie, przeciążenie po 5 próbach przerywają przejście
+    (stan zapisany); brak pliku, błąd zapisu lokalnego – tylko ten element;
+  - pełna lista (pierwsze przejście, po 410, inny folder): elementy stanu nieobecne na liście
+    są usuwane według tych samych zasad; stan innego folderu jest porzucany (pliki zostają);
+  - stan zapisywany co najwyżej co 30 s w trakcie i na końcu, z dotychczasowym deltaLinkiem;
+  - pomijane: notesy OneNote, elementy udostępnione z innego dysku, pliki ≥ 4 GB, nazwy
+    zarezerwowane (`.AmiDrive` w korzeniu, `.AmiDrive.part`).
+- **Limit nazw** z typu woluminu (`Info`): OFS/FFS `DOS\0`–`DOS\5` → 30, reszta (FFS2, SFS, PFS)
+  → 107. Na A1200 `SYS:` i `RAM:` dają 30 (bezpiecznie: najwyżej krótsze nazwy).
 - Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.
 
 ## Znane ograniczenia / do zrobienia
@@ -94,6 +120,11 @@
   (jeśli nie, strony mogą przekroczyć 48 KB – wtedy dopisywać parametry do linku).
 - OneDrive for Business: delta na podfolderze może nie działać (wtedy delta od korzenia
   i filtrowanie po przodkach w stanie).
+- Etap 1: plik usunięty na Amidze nie jest pobierany ponownie, dopóki nie zmieni się w chmurze
+  (etap 2 zamieni to na usunięcie w chmurze).
+- Element, którego folder nadrzędny nie należy do synchronizowanego folderu (np. przeniesiony
+  na zewnątrz, jeśli OneDrive nie zgłosi go jako usuniętego), liczony jako błąd – deltaLink stoi.
+  Do sprawdzenia z prawdziwym kontem.
 - Pobieranie nie wznawia przerwanych plików (nagłówek `Range`) – plik pobierany od nowa.
 
 - Nazwy w Unicode NFD (np. z macOS: litera + znak łączący) dają `_` zamiast litery z ogonkiem –

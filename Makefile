@@ -24,7 +24,7 @@ CFLAGS := +aos68k_win -c99 -cpu=68020 -O3 -I$(AMISSL) -I$(NETINC) -I$(NDK)
 OUT  := build/amiga/AmiDrive
 OBJ  := build/amiga/obj
 SRCS := main.c net_amiga.c plat_amiga.c http.c json.c fsmap.c tz.c session.c config.c auth.c \
-        graph.c state.c
+        graph.c state.c sync.c
 OBJS := $(addprefix $(OBJ)/,$(SRCS:.c=.o))
 HDRS := $(wildcard src/*.h)
 
@@ -42,8 +42,8 @@ $(OBJ):
 # The PC test suite on the Amiga: big endian, 32-bit long, another compiler.
 TOUT  := build/amiga/AmiDriveTests
 TSRCS := src/http.c src/json.c src/fsmap.c src/tz.c src/session.c src/config.c src/auth.c \
-         src/graph.c src/state.c tests/tests.c tests/test_http.c tests/test_json.c tests/test_fsmap.c \
-         tests/test_tz.c tests/test_session.c tests/test_config.c tests/test_auth.c tests/test_graph.c tests/test_state.c \
+         src/graph.c src/state.c src/sync.c tests/tests.c tests/test_http.c tests/test_json.c tests/test_fsmap.c \
+         tests/test_tz.c tests/test_session.c tests/test_config.c tests/test_auth.c tests/test_graph.c tests/test_state.c tests/test_sync.c \
          tests/fake_net.c tests/fake_plat.c
 
 tests: $(TOUT)

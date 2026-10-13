@@ -42,6 +42,7 @@ void test_config(void);
 void test_auth(void);
 void test_graph(void);
 void test_state(void);
+void test_sync(void);
 
 /* fake_net.c */
 struct NetConn;
@@ -57,6 +58,10 @@ extern unsigned long fake_time;
 extern long fake_slept;
 extern int fake_break_in;
 extern int fake_write_fail;
+void fake_fs_reset(void);
+const char *fake_file(const char *path, long *len);   /* NULL: no such file */
+int fake_is_dir(const char *path);
+int fake_file_count(void);
 
 /* tests.c: "HTTP/1.1 <status> X\r\nContent-Length: n\r\n\r\n<body>" (static ring of buffers) */
 const char *http_resp(int status, const char *extra_headers, const char *body);

@@ -32,6 +32,26 @@ long plat_read(PlatFile *f, void *buf, long len);       /* bytes, 0 at the end, 
 int  plat_write(PlatFile *f, const void *buf, long len); /* AD_OK or AD_ERR */
 int  plat_close(PlatFile *f, int commit);                /* AD_OK or AD_ERR */
 
+/* Create (replace) path and write it directly, without "<path>.new" - for a
+ * temporary file. plat_close(f, 0) deletes it. */
+PlatFile *plat_create(const char *path);
+
+typedef struct {
+    unsigned long size;
+    unsigned long date;          /* local seconds since 1978-01-01 */
+    int dir;
+} PlatInfo;
+
+/* Size, date and kind of a file or directory. Returns AD_OK or AD_ERR (missing). */
+int plat_file_info(const char *path, PlatInfo *info);
+
+/* Set the date of a file (local seconds since 1978). Returns AD_OK or AD_ERR. */
+int plat_set_date(const char *path, unsigned long local_secs);
+
+/* Rename / move on the same volume; fails when to exists. Returns AD_OK or AD_ERR. */
+int plat_rename(const char *from, const char *to);
+
+/* Deletes a file or an empty directory. Returns AD_OK or AD_ERR. */
 int plat_delete_file(const char *path);
 
 /* Create a directory if it does not exist yet. Returns AD_OK or AD_ERR. */
