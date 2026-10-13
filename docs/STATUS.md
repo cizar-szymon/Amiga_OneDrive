@@ -24,9 +24,9 @@
 | Start z ikony (Tool Types, `WINDOW`, dziennik `.AmiDrive/AmiDrive.log`) | ⏳ |
 | `state.c`: baza stanu po `id` (ścieżki z łańcucha rodziców), plik tekstowy zapisywany strumieniowo do `.new` i podmieniany, linia końcowa | ✅ testy + A1200 (`AmiDrive TEST` zapisuje i czyta stan w `T:`) |
 | `plat`: strumieniowe pliki (`plat_open_read/write`, `plat_close` z podmianą) | ✅ A1200 |
-| `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 (atrapy), ⏳ prawdziwe konto |
+| `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki); ⏳ zmiany nazw, usuwanie, podfoldery na prawdziwym koncie |
 | `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
-| `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ kod, ⏳ prawdziwe konto |
+| `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ `ONCE` na A1200; ⏳ praca w tle |
 | Etap 2: wysyłanie, sesje wysyłania, konflikty | ⏳ |
 
 ## Wyniki testów
@@ -37,6 +37,11 @@
   logowanie na telefonie/PC, token zapisany; `INFO`: konto firmowe, OneDrive for Business.
   Błąd znaleziony przy tym: `device_code` od Microsoftu ma 1045 znaków, bufor miał 1024
   („incomplete device code answer”) – teraz `AUTH_TOKEN_SIZE` (4096), test z kodem 1500 znaków.
+- A1200, pierwsza prawdziwa synchronizacja (14.10.2026, OneDrive for Business,
+  `REMOTE=/Retro/AmigaDrive`, `LOCAL=Work:OneDrive`): pusty folder → stan z deltaLinkiem;
+  po wgraniu plików przejście przyrostowe pobrało 5 plików (3,6 MB, m.in. ADF-y 880 KB
+  i 1,76 MB) z datami z chmury; następne przejście: „no changes”. Nazwa z `ł` przy
+  `CHARSET=LATIN1` → `Bry_a1~77bc45.3mf` (hash, zgodnie z zasadą).
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
@@ -125,10 +130,9 @@
 
 ## Znane ograniczenia / do zrobienia
 
-- Do sprawdzenia z prawdziwym kontem: czy `nextLink`/`deltaLink` zachowują `$select` i `$top`
-  (jeśli nie, strony mogą przekroczyć 48 KB – wtedy dopisywać parametry do linku).
-- OneDrive for Business: delta na podfolderze może nie działać (wtedy delta od korzenia
-  i filtrowanie po przodkach w stanie).
+- Sprawdzone z kontem Business: `deltaLink` zachowuje `$select` i `$top`; delta na podfolderze
+  działa (pusty folder, potem przyrostowo 5 plików). Pusty folder w Business nie zwraca
+  w delcie samego siebie (nie szkodzi – korzeń bierzemy z `graph_item`).
 - Etap 1: plik usunięty na Amidze nie jest pobierany ponownie, dopóki nie zmieni się w chmurze
   (etap 2 zamieni to na usunięcie w chmurze).
 - Element, którego folder nadrzędny nie należy do synchronizowanego folderu (np. przeniesiony
