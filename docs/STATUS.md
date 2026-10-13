@@ -1,0 +1,75 @@
+# AmiDrive – stan prac i decyzje
+
+## Stan
+
+| Krok | Stan |
+|---|---|
+| Środowisko: vbcc + NDK 3.2 + netinclude Roadshow + SDK AmiSSL 5.24 (`C:\amiga-dev\amissl`) | ✅ |
+| A1200 (68060, OS 3.2, Roadshow 1.14, AmiSSL 5.24): zegar ustawiony, `TZ` poprawione | ✅ 13.10.2026 |
+| Szkielet: `Makefile` (vbcc), `Makefile.host` (testy na PC), `tools/amiga_remote.py` | ✅ |
+| `net_amiga.c`: gniazda + TLS z weryfikacją certyfikatu, nazwy hosta, SNI, min. TLS 1.2 | ✅ test na A1200 |
+| `http.c`: HTTP/1.1, keep-alive, Content-Length / chunked / do zamknięcia, Location, Retry-After | ✅ testy + A1200 |
+| `json.c`: jsmn + klucze, ścieżki, tablice, `\uXXXX` → UTF-8, liczby | ✅ testy |
+| `fsmap.c`: UTF-8 ↔ Latin-1 / Latin-2, nazwy lokalne (skracanie z hashem), sprawdzanie nazw do wysłania | ✅ testy |
+| `tz.c`: ISO 8601 ↔ sekundy od 1978, strefa POSIX `TZ` z czasem letnim | ✅ testy |
+| `AmiDrive TEST` (zegar, strefa, DNS, TLS, 2 zapytania na jednym połączeniu) | ✅ A1200 |
+| `session.c`: trwałe połączenie na host, ponowienie na nowym połączeniu, gdy serwer zamknął bezczynne | ✅ testy + A1200 |
+| `config.c`: `AmiDrive.prefs` (`KLUCZ=wartość`), argumenty zapisywane | ✅ testy + A1200 |
+| `plat_amiga.c`: czas UTC, czekanie z Ctrl-C, bezpieczny zapis plików (`.new` + rename) | ✅ A1200 |
+| `auth.c`: device code flow, odświeżanie (rotacja refresh tokenu), zapis w `ENVARC:AmiDrive/token` | ✅ testy; na A1200 do serwera Microsoftu dochodzi, **czeka na identyfikator aplikacji (CLIENTID)** |
+| `LOGIN`, `LOGOUT`, `INFO` (właściciel i zajętość OneDrive) | ✅ kod, ⏳ test z prawdziwym kontem |
+| `graph.c`: `/me/drive` | ✅ testy |
+| `graph.c`: delta, children, pobieranie (302 → inny host), stronicowanie, 429/503 | ⏳ |
+| Start z ikony (Tool Types, `WINDOW`, dziennik), praca w tle co `INTERVAL` | ⏳ |
+| `state.c`: baza stanu, zapis atomowy | ⏳ |
+| `sync.c`: etap 1 – pobieranie zmian | ⏳ |
+| Etap 2: wysyłanie, sesje wysyłania, konflikty | ⏳ |
+
+## Wyniki testów
+
+- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 618 sprawdzeń, 0 błędów.
+- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 618 sprawdzeń, 0 błędów.
+- A1200 `LOGIN` z fikcyjnym `CLIENTID`: odpowiedź Microsoftu `AADSTS700038 ... is not a valid
+  application identifier` – zapytanie dochodzi i jest poprawne, brakuje tylko rejestracji aplikacji.
+- A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
+  `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
+- A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
+  `untrusted-root`; przyjęty `badssl.com`.
+
+## Decyzje
+
+- **Tryb pracy (użytkownik, 13.10.2026):** domyślnie praca w tle, sprawdzanie zmian co 3 min
+  (`INTERVAL=3`); `ONCE` – jedno przejście.
+- **Konfiguracja zapamiętywana (użytkownik, 13.10.2026):** po uruchomieniu z `LOCAL`/`REMOTE`
+  ustawienia są zapisywane, potem wystarczy samo `AmiDrive`.
+- **Ikona (użytkownik, 13.10.2026):** start z Workbencha, ustawienia także w Tool Types.
+- **Miejsca danych (użytkownik, 13.10.2026):** ustawienia `ENVARC:AmiDrive/AmiDrive.prefs`,
+  token `ENVARC:AmiDrive/token`, stan + pliki tymczasowe + dziennik w `<LOCAL>/.AmiDrive/`
+  (`STATE=` zmienia). Uzasadnienie i tabela w `CLAUDE.md`, sekcja „Stan synchronizacji”.
+
+- **Weryfikacja certyfikatów zawsze włączona** (przykłady z SDK AmiSSL jej nie mają). Łańcuch
+  z `AmiSSL:Certs`, `SSL_set1_host`, SNI, minimum TLS 1.2. Przez te połączenia idą tokeny.
+- **Keep-alive**: nawiązanie TLS kosztuje sekundy (na 68030 więcej), kolejne zapytanie
+  dziesiątki ms. Połączenie trzymane otwarte, nowe tylko po `Connection: close` lub błędzie.
+- **Strefa czasowa**: najpierw zmienna `TZ` (POSIX, z regułami czasu letniego), potem stałe
+  przesunięcie z Prefs/Locale. Ustawienia regionalne OS 3.2 nie znają czasu letniego (tylko
+  `lp_GMTOffset`), więc same dawałyby latem błąd 1 h. Na A1200: `TZ=CET-1CEST,M3.5.0,M10.5.0/3`,
+  w Locale zostaje GMT+1 (decyzja użytkownika).
+- **Czas** jako `unsigned long` sekund od 1978-01-01 UTC (epoka Amigi): zakres do 2114 r.,
+  bez arytmetyki 64-bit.
+- **Rozmiary plików**: `unsigned long`, czyli do 4 GB; większe pliki `json_ulong` zgłasza jako
+  `AD_ERR_TOOBIG` – do obsłużenia w `sync.c` (pominięcie z komunikatem).
+- **Kodowanie nazw**: `CHARSET=LATIN1` (domyślnie) lub `LATIN2` (polskie litery). Znaki spoza
+  strony kodowej → `_`, za długie nazwy → `<początek>~hhhhhh<.ext>` (FNV-1a pełnej nazwy).
+  Gdy nazwa się zmienia, `sync.c` zapisze parę nazw w stanie; przy kolizji `force_hash`.
+- **JSON**: jsmn potrzebuje całej odpowiedzi w pamięci. Strony delta trzeba więc zmniejszyć:
+  `$select` tylko z potrzebnymi polami, umiarkowany rozmiar strony; jedna strona naraz.
+- **Moduł `tz.c`** wydzielony z `fsmap.c` (daty i strefy to osobna, dobrze testowalna logika).
+- Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.
+
+## Znane ograniczenia / do zrobienia
+
+- Nazwy w Unicode NFD (np. z macOS: litera + znak łączący) dają `_` zamiast litery z ogonkiem –
+  można dodać składanie najczęstszych znaków.
+- `Retry-After` w postaci daty HTTP nie jest obsługiwane (Graph podaje sekundy).
+- `gethostbyname` tylko IPv4.
