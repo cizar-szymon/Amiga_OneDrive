@@ -12,6 +12,21 @@ void test_config(void)
     CHECK_INT(c.interval, 3);
     CHECK_STR(c.tenant, "common");
     CHECK_STR(c.remote, "");
+    CHECK_STR(c.upload, "YES");
+    CHECK_INT(config_set(&c, "upload", "no"), AD_OK);
+    CHECK_STR(c.upload, "NO");
+    CHECK_INT(config_set(&c, "UPLOAD", "maybe"), AD_ERR_PROTO);
+    CHECK_STR(c.upload, "NO");
+    {
+        char t[1024];
+        Config u;
+        CHECK(config_format(&c, t, sizeof(t)) > 0);
+        CHECK(strstr(t, "UPLOAD=NO\n") != NULL);
+        config_defaults(&u);
+        CHECK_INT(config_parse(&u, t), AD_OK);
+        CHECK_STR(u.upload, "NO");
+    }
+    CHECK_INT(config_set(&c, "UPLOAD", "YES"), AD_OK);
 
     /* kv_get: case, spaces, comments, '=' in the value */
     CHECK_INT(kv_get("# c\n  Key = x \nkey=a=b \r\n", "KEY", v, sizeof(v)), 1);

@@ -25,7 +25,8 @@ enum {
     AD_ERR_AUTH    = -8,   /* not signed in / sign-in expired: run LOGIN again */
     AD_ERR_HTTP    = -9,   /* unexpected HTTP status (details in the error text) */
     AD_ERR_NOTFOUND = -10, /* the item or folder does not exist (HTTP 404) */
-    AD_ERR_GONE    = -11   /* delta link expired (HTTP 410): start again with a full delta */
+    AD_ERR_GONE    = -11,  /* delta link expired (HTTP 410): start again with a full delta */
+    AD_ERR_CONFLICT = -12  /* name taken (409) or the item changed meanwhile (412) */
 };
 
 /* Application (client) ID of the AmiDrive registration in Microsoft Entra ID

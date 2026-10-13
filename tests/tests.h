@@ -58,6 +58,7 @@ extern unsigned long fake_time;
 extern long fake_slept;
 extern int fake_break_in;
 extern int fake_write_fail;
+extern int fake_dir_fail;
 void fake_fs_reset(void);
 const char *fake_file(const char *path, long *len);   /* NULL: no such file */
 int fake_is_dir(const char *path);

@@ -99,6 +99,13 @@ long net_read(NetConn *c, void *buf, long len)
 
 int net_write(NetConn *c, const void *buf, long len)
 {
+    char note[32];
+
+    if (len > 4096) {                   /* a large body (upload piece): noted, not kept */
+        sprintf(note, "[%ld bytes]", len);
+        buf = note;
+        len = (long)strlen(note);
+    }
     if (c->sent_len + len >= (long)sizeof(c->sent))
         return AD_ERR_NET;
     memcpy(c->sent + c->sent_len, buf, (size_t)len);

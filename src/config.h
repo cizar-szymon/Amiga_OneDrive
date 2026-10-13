@@ -18,6 +18,7 @@ typedef struct {
     char remote[CFG_PATH_SIZE];         /* OneDrive folder, e.g. /Amiga */
     char state[CFG_PATH_SIZE];          /* "" = <local>/.AmiDrive */
     char charset[8];                    /* LATIN1 | LATIN2 */
+    char upload[4];                     /* YES: changes on the Amiga are sent | NO */
     long interval;                      /* minutes */
     char client_id[48];
     char tenant[40];

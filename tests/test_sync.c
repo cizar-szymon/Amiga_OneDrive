@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "amidrive.h"
 #include "plat.h"
 #include "sync.h"
@@ -107,6 +109,200 @@ static unsigned long date_of(const char *path)
 {
     PlatInfo info;
     return plat_file_info(path, &info) == AD_OK ? info.date : 0;
+}
+
+
+/* ---- stage 2: changes on the Amiga -> OneDrive ------------------------------------------ */
+
+#define UP "W:Up"
+#define UL(x) http_resp(200, NULL, "{\"uploadUrl\":\"https://up.example.com/" x "\"}")
+
+static const char *no_items[1];
+
+static void test_upload(void)
+{
+    const char *items[6];
+    char iso[24], *big;
+    StEntry *e;
+    int i;
+
+    fake_fs_reset();
+    state_init(&st);
+    cfg.local = UP;
+    cfg.state_file = UP "/.AmiDrive/state";
+    cfg.charset = FS_LATIN1;
+    cfg.upload = 1;
+
+    /* ---- first pass: the cloud folder is empty, everything here is new ---- */
+    CHECK_INT(plat_make_dir(UP), AD_OK);
+    CHECK_INT(plat_write_file(UP "/new.txt", "hello", 5), AD_OK);
+    CHECK_INT(plat_make_dir(UP "/Sub"), AD_OK);
+    CHECK_INT(plat_write_file(UP "/Sub/s.bin", "", 0), AD_OK);
+    CHECK_INT(plat_write_file(UP "/bad*.txt", "x", 1), AD_OK);
+    tz_format_iso8601(tz_to_utc(&tz, date_of(UP "/new.txt")), iso);
+
+    strcpy(gstream, root_json("UPR"));
+    strcat(gstream, page("delta", "U1", no_items));
+    strcat(gstream, UL("s1"));
+    strcat(gstream, http_resp(201, NULL, item("S1", "UPR", "Sub", FOLDER_, 0, "cs")));
+    strcat(gstream, http_resp(201, NULL, item("U2", "S1", "s.bin", FILE_, 0, "c2")));
+    strcat(gstream, http_resp(200, NULL, item("U2", "S1", "s.bin", FILE_, 0, "c2")));
+    strcpy(dstream, http_resp(201, NULL, item("U1", "UPR", "new.txt", FILE_, 5, "c1")));
+    start();
+    CHECK_INT(sync_run(&cfg, &st, &ss, err, sizeof(err)), AD_OK);
+    CHECK_STR(err, "");
+    CHECK_INT(ss.uploaded, 2);
+    CHECK_INT(ss.remote_folders, 1);
+    CHECK_INT(ss.skipped, 1);
+    CHECK_INT(ss.failed, 0);
+    CHECK(ss.up_bytes == 5UL);
+    CHECK_INT(st.count, 3);
+    e = state_find_name(&st, "UPR", "new.txt");
+    CHECK(e != NULL && strcmp(e->id, "U1") == 0 && e->ltime == date_of(UP "/new.txt"));
+    e = state_find_name(&st, "S1", "s.bin");
+    CHECK(e != NULL && strcmp(e->id, "U2") == 0);
+    CHECK(strstr(fake_sent(g.conn), "POST /v1.0/me/drive/items/UPR:/new.txt:/createUploadSession HTTP/1.1") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "\"@microsoft.graph.conflictBehavior\":\"fail\"") != NULL);
+    CHECK(strstr(fake_sent(g.conn), iso) != NULL);
+    CHECK(strstr(fake_sent(g.conn), "POST /v1.0/me/drive/items/UPR/children HTTP/1.1") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "{\"name\":\"Sub\",\"folder\":{}") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "PUT /v1.0/me/drive/items/S1:/s.bin:/content?@microsoft.graph.conflictBehavior=fail HTTP/1.1") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "PATCH /v1.0/me/drive/items/U2 HTTP/1.1") != NULL);
+    CHECK(strstr(fake_sent(dl.conn), "PUT /s1 HTTP/1.1\r\nHost: up.example.com\r\n") != NULL);
+    CHECK(strstr(fake_sent(dl.conn), "Content-Range: bytes 0-4/5\r\n") != NULL);
+    CHECK(strstr(fake_sent(dl.conn), "\r\n\r\nhello") != NULL);
+    CHECK(strstr(fake_sent(dl.conn), "Authorization") == NULL);
+    CHECK(strstr(logbuf, "Not sent W:Up/bad*.txt") != NULL);
+    finish();
+
+    /* ---- our own uploads come back in the delta: nothing to do; then a changed file,
+     * a renamed one and a large new one (two pieces) ---- */
+    CHECK_INT(plat_write_file(UP "/new.txt", "hello world", 11), AD_OK);
+    CHECK_INT(plat_set_date(UP "/new.txt", date_of(UP "/new.txt") + 60), AD_OK);
+    CHECK_INT(plat_rename(UP "/Sub/s.bin", UP "/Sub/t.bin"), AD_OK);
+    big = malloc(400000);
+    CHECK(big != NULL);
+    if (!big)
+        return;
+    for (i = 0; i < 400000; i++)
+        big[i] = (char)i;
+    CHECK_INT(plat_write_file(UP "/big.bin", big, 400000), AD_OK);
+    free(big);
+
+    items[0] = item("U1", "UPR", "new.txt", FILE_, 5, "c1");
+    items[1] = item("S1", "UPR", "Sub", FOLDER_, 0, "cs");
+    items[2] = item("U2", "S1", "s.bin", FILE_, 0, "c2");
+    items[3] = NULL;
+    strcpy(gstream, root_json("UPR"));
+    strcat(gstream, page("delta", "U2", items));
+    strcat(gstream, http_resp(200, NULL, item("U2", "S1", "t.bin", FILE_, 0, "c2")));
+    strcat(gstream, UL("s2"));
+    strcat(gstream, UL("s3"));
+    strcpy(dstream, http_resp(202, NULL, "{\"nextExpectedRanges\":[\"327680-\"]}"));
+    strcat(dstream, http_resp(201, NULL, item("U3", "UPR", "big.bin", FILE_, 400000, "c3")));
+    strcat(dstream, http_resp(200, NULL, item("U1", "UPR", "new.txt", FILE_, 11, "c1b")));
+    start();
+    CHECK_INT(sync_run(&cfg, &st, &ss, err, sizeof(err)), AD_OK);
+    CHECK_STR(err, "");
+    CHECK_INT(ss.downloaded, 0);
+    CHECK_INT(ss.moved, 0);
+    CHECK_INT(ss.uploaded, 2);
+    CHECK_INT(ss.remote_moved, 1);
+    CHECK_INT(ss.remote_deleted, 0);
+    CHECK_INT(ss.failed, 0);
+    CHECK(ss.up_bytes == 400011UL);
+    CHECK(strstr(fake_sent(g.conn), "PATCH /v1.0/me/drive/items/U2 HTTP/1.1") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "{\"name\":\"t.bin\"}") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "POST /v1.0/me/drive/items/U1/createUploadSession HTTP/1.1") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "If-Match: ec1\r\n") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "\"@microsoft.graph.conflictBehavior\":\"replace\"") != NULL);
+    CHECK(strstr(fake_sent(dl.conn), "Content-Range: bytes 0-327679/400000\r\n") != NULL);
+    CHECK(strstr(fake_sent(dl.conn), "[327680 bytes]") != NULL);
+    CHECK(strstr(fake_sent(dl.conn), "Content-Range: bytes 327680-399999/400000\r\n") != NULL);
+    CHECK(strstr(fake_sent(dl.conn), "Content-Range: bytes 0-10/11\r\n") != NULL);
+    e = state_find(&st, "U2");
+    CHECK(e != NULL && strcmp(e->lname, "t.bin") == 0);
+    e = state_find(&st, "U1");
+    CHECK(e != NULL && e->size == 11UL && strcmp(e->ctag, "c1b") == 0 &&
+          e->ltime == date_of(UP "/new.txt"));
+    CHECK_INT(st.count, 4);
+    finish();
+
+    /* ---- deleted here: deleted there (a folder with what is in it at once) ---- */
+    CHECK_INT(plat_delete_file(UP "/new.txt"), AD_OK);
+    CHECK_INT(plat_delete_file(UP "/Sub/t.bin"), AD_OK);
+    CHECK_INT(plat_delete_file(UP "/Sub"), AD_OK);
+    strcpy(gstream, root_json("UPR"));
+    strcat(gstream, page("delta", "U3", no_items));
+    strcat(gstream, http_resp(204, NULL, ""));
+    strcat(gstream, http_resp(204, NULL, ""));
+    dstream[0] = '\0';
+    start();
+    CHECK_INT(sync_run(&cfg, &st, &ss, err, sizeof(err)), AD_OK);
+    CHECK_INT(ss.remote_deleted, 2);
+    CHECK(strstr(fake_sent(g.conn), "DELETE /v1.0/me/drive/items/U1 HTTP/1.1") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "If-Match: ec1b\r\n") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "DELETE /v1.0/me/drive/items/S1 HTTP/1.1") != NULL);
+    CHECK(strstr(fake_sent(g.conn), "DELETE /v1.0/me/drive/items/U2 ") == NULL);
+    CHECK_INT(st.count, 1);
+    CHECK(state_find(&st, "U3") != NULL);
+    finish();
+
+    /* ---- many items missing at once: nothing is deleted ---- */
+    for (i = 0; i < 12; i++) {
+        StEntry x;
+        char id[8], nm[8];
+        memset(&x, 0, sizeof(x));
+        sprintf(id, "G%d", i);
+        sprintf(nm, "g%d", i);
+        x.id = id;
+        x.parent = "UPR";
+        x.name = x.lname = nm;
+        CHECK(state_put(&st, &x) != NULL);
+    }
+    strcpy(gstream, root_json("UPR"));
+    strcat(gstream, page("delta", "U4", no_items));
+    start();
+    CHECK_INT(sync_run(&cfg, &st, &ss, err, sizeof(err)), AD_OK);
+    CHECK_INT(ss.remote_deleted, 0);
+    CHECK_INT(st.count, 13);
+    CHECK(strstr(logbuf, "Warning: nothing deleted on OneDrive, 12 of 13 items missing here") != NULL);
+    finish();
+
+    /* ---- the directory cannot be read: nothing is sent or deleted ---- */
+    strcpy(gstream, root_json("UPR"));
+    strcat(gstream, page("delta", "U5", no_items));
+    start();
+    fake_dir_fail = 1;
+    CHECK_INT(sync_run(&cfg, &st, &ss, err, sizeof(err)), AD_OK);
+    fake_dir_fail = 0;
+    CHECK_INT(ss.failed, 1);
+    CHECK(strstr(logbuf, "Nothing sent: W:Up") != NULL);
+    CHECK_INT(st.count, 13);
+    finish();
+
+    /* ---- changed here and there (412): left for the next pass ---- */
+    for (i = 0; i < 12; i++) {
+        char id[8];
+        sprintf(id, "G%d", i);
+        state_remove(&st, id);
+    }
+    CHECK_INT(plat_write_file(UP "/big.bin", "short", 5), AD_OK);
+    strcpy(gstream, root_json("UPR"));
+    strcat(gstream, page("delta", "U6", no_items));
+    strcat(gstream, http_resp(412, NULL, "{\"error\":{\"code\":\"resourceModified\"}}"));
+    start();
+    CHECK_INT(sync_run(&cfg, &st, &ss, err, sizeof(err)), AD_OK);
+    CHECK_INT(ss.uploaded, 0);
+    CHECK_INT(ss.failed, 1);
+    CHECK(strstr(logbuf, "changed on OneDrive too") != NULL);
+    e = state_find(&st, "U3");
+    CHECK(e != NULL && e->size == 400000UL);
+    finish();
+
+    cfg.upload = 0;
+    state_free(&st);
+    fake_fs_reset();
 }
 
 void test_sync(void)
@@ -365,4 +561,6 @@ void test_sync(void)
 
     state_free(&st);
     fake_fs_reset();
+
+    test_upload();
 }

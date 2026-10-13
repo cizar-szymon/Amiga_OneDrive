@@ -18,6 +18,11 @@ static unsigned slot(const char *id)
     return (unsigned)(fs_hash(id) % ST_BUCKETS);
 }
 
+static unsigned name_slot(const char *parent, const char *lname)
+{
+    return (unsigned)((fs_hash(parent) * 31UL + fs_hash(lname)) % ST_BUCKETS);
+}
+
 void state_init(State *s)
 {
     memset(s, 0, sizeof(*s));
@@ -35,6 +40,7 @@ void state_free(State *s)
             e = next;
         }
         s->bucket[i] = NULL;
+        s->by_name[i] = NULL;
     }
     s->count = 0;
 }
@@ -45,6 +51,16 @@ StEntry *state_find(const State *s, const char *id)
 
     for (e = s->bucket[slot(id)]; e; e = e->next)
         if (strcmp(e->id, id) == 0)
+            return e;
+    return NULL;
+}
+
+StEntry *state_find_name(const State *s, const char *parent_id, const char *lname)
+{
+    StEntry *e;
+
+    for (e = s->by_name[name_slot(parent_id, lname)]; e; e = e->next_name)
+        if (strcmp(e->lname, lname) == 0 && strcmp(e->parent, parent_id) == 0)
             return e;
     return NULL;
 }
@@ -91,6 +107,9 @@ StEntry *state_put(State *s, const StEntry *e)
     h = slot(n->id);
     n->next = s->bucket[h];
     s->bucket[h] = n;
+    h = name_slot(n->parent, n->lname);
+    n->next_name = s->by_name[h];
+    s->by_name[h] = n;
     s->count++;
     return n;
 }
@@ -101,8 +120,13 @@ int state_remove(State *s, const char *id)
 
     for (pp = &s->bucket[slot(id)]; *pp; pp = &(*pp)->next) {
         if (strcmp((*pp)->id, id) == 0) {
-            StEntry *e = *pp;
+            StEntry *e = *pp, **np;
             *pp = e->next;
+            for (np = &s->by_name[name_slot(e->parent, e->lname)]; *np; np = &(*np)->next_name)
+                if (*np == e) {
+                    *np = e->next_name;
+                    break;
+                }
             free(e);
             s->count--;
             return AD_OK;
@@ -245,7 +269,7 @@ int state_save(const State *s, const char *path)
     put_c('\n');
     for (e = state_next(s, NULL); e; e = state_next(s, e)) {
         put_c('e');
-        put_num(e->flags);
+        put_num(e->flags & 0xFF);       /* higher bits: in memory only */
         put_num(e->size);
         put_num(e->mtime);
         put_num(e->ltime);

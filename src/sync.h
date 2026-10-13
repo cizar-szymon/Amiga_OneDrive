@@ -27,6 +27,8 @@
 #define SYNC_PART_NAME ".AmiDrive.part"   /* download in progress, in each directory */
 #define SYNC_STATE_DIR ".AmiDrive"        /* in the synchronised directory: skipped */
 #define SYNC_SAVE_SECS 30                 /* save the state at most this often while busy */
+#define SYNC_DELETE_GUARD 10              /* more items missing here than this, and more than
+                                             half of all: nothing is deleted on OneDrive */
 
 typedef struct {
     Session *graph;              /* graph.microsoft.com */
@@ -37,6 +39,7 @@ typedef struct {
     FsCharset charset;
     int maxname;                 /* longest local file name (30 OFS/FFS, 107 others) */
     const Tz *tz;                /* for file dates */
+    int upload;                  /* stage 2: send the changes made on the Amiga */
 
     /* A valid access token; force = 1 after it was rejected. NULL on failure, with a
      * message in err and the code in *rc (AD_ERR_AUTH: sign in again). */
@@ -52,6 +55,9 @@ typedef struct {
     long skipped;                /* not synchronised: notebooks, shared, >= 4 GB, ... */
     long failed;                 /* will be tried again in the next pass */
     unsigned long bytes;
+    long uploaded;               /* files sent to OneDrive (new or new versions) */
+    long remote_moved, remote_deleted, remote_folders;
+    unsigned long up_bytes;
     int full;                    /* the whole folder was listed */
 } SyncStats;
 

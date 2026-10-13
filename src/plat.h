@@ -45,6 +45,15 @@ typedef struct {
 /* Size, date and kind of a file or directory. Returns AD_OK or AD_ERR (missing). */
 int plat_file_info(const char *path, PlatInfo *info);
 
+/* Directory listing. plat_dir_next() gives the next entry (soft links are left out):
+ * 1 = an entry in name / info, 0 = no more entries, AD_ERR = the listing failed
+ * (then the directory must not be taken as complete). */
+typedef struct PlatDir PlatDir;
+
+PlatDir *plat_dir_open(const char *path);
+int  plat_dir_next(PlatDir *d, char *name, int size, PlatInfo *info);
+void plat_dir_close(PlatDir *d);
+
 /* Set the date of a file (local seconds since 1978). Returns AD_OK or AD_ERR. */
 int plat_set_date(const char *path, unsigned long local_secs);
 

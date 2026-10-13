@@ -518,6 +518,449 @@ static void delete_unseen(void)
         e->flags &= ~(unsigned)ST_SEEN;
 }
 
+/* ---- stage 2: changes on the Amiga -> OneDrive ----------------------------------------
+ *
+ * After the cloud changes were applied, the local directory is scanned and compared
+ * with the state: new files and folders are created on OneDrive, changed files are
+ * sent as new versions (only while the cloud version is still the one we know), a
+ * new file with the size and date of a missing one is a rename / move, and items
+ * missing here are deleted there (into the recycle bin). */
+
+#define ST_LOCAL 0x200           /* found by the local scan (in memory only) */
+
+/* a new or changed local item, in scan order (folders before their contents) */
+typedef struct NewItem {
+    struct NewItem *next;
+    struct NewItem *pdir;        /* a new parent folder, or NULL: parent_id */
+    char *path, *lname;
+    char *parent_id;             /* remote id of the parent when it is known */
+    char *mod_id;                /* a changed file: its entry; NULL: a new item */
+    unsigned long size, date;
+    int dir, skip;
+    char id[GRAPH_ID_SIZE];      /* a new folder, once made on OneDrive */
+} NewItem;
+
+static NewItem *items_head, **items_tail;
+static char spath[PATH_SIZE], sname[FS_MAXNAME_LONG + 8];
+static char rname[GRAPH_NAME_SIZE];
+static GraphItem up_item;
+static char *up_buf;
+static PlatFile *in_file;
+static int scan_depth;
+static char note[100];
+
+/* call with a valid token, again with a fresh one when it was rejected */
+#define WITH_TOKEN(expr) \
+    for (attempt = 0, rc = AD_ERR_AUTH; attempt < 2 && rc == AD_ERR_AUTH; attempt++) { \
+        if (!(tok = token(attempt > 0, &rc))) \
+            break; \
+        rc = (expr); \
+    }
+
+static char *dup_str(const char *s)
+{
+    char *p = s ? malloc(strlen(s) + 1) : NULL;
+
+    if (p)
+        strcpy(p, s);
+    return p;
+}
+
+static void free_item(NewItem *n)
+{
+    free(n->path);
+    free(n->lname);
+    free(n->parent_id);
+    free(n->mod_id);
+    free(n);
+}
+
+static void free_items(void)
+{
+    while (items_head) {
+        NewItem *n = items_head;
+        items_head = n->next;
+        free_item(n);
+    }
+    items_tail = &items_head;
+}
+
+/* spath / sname -> a new list item */
+static NewItem *add_item(int dir, const PlatInfo *info, const char *parent_id, NewItem *pdir,
+                         const char *mod_id)
+{
+    NewItem *n = malloc(sizeof(*n));
+
+    if (!n)
+        return NULL;
+    memset(n, 0, sizeof(*n));
+    n->dir = dir;
+    n->size = info->size;
+    n->date = info->date;
+    n->pdir = pdir;
+    n->path = dup_str(spath);
+    n->lname = dup_str(sname);
+    n->parent_id = dup_str(parent_id);
+    n->mod_id = dup_str(mod_id);
+    if (!n->path || !n->lname || (parent_id && !n->parent_id) || (mod_id && !n->mod_id)) {
+        free_item(n);
+        return NULL;
+    }
+    *items_tail = n;
+    items_tail = &n->next;
+    return n;
+}
+
+/* Scan the directory spath: its remote id is dir_id, or it is the new folder pdir.
+ * Entries found get ST_LOCAL; new and changed items go to the list. Any failure
+ * makes the scan incomplete (AD_ERR): then nothing may be taken as missing. */
+static int scan_dir(const char *dir_id, NewItem *pdir)
+{
+    size_t len = strlen(spath);
+    int sep = len > 0 && spath[len - 1] != ':' && spath[len - 1] != '/';
+    PlatInfo info;
+    PlatDir *d;
+    int r, rc = AD_OK;
+
+    if (scan_depth >= ST_MAXDEPTH || !(d = plat_dir_open(spath)))
+        return AD_ERR;
+    scan_depth++;
+    while ((r = plat_dir_next(d, sname, (int)sizeof(sname), &info)) == 1) {
+        StEntry *e = dir_id ? state_find_name(st, dir_id, sname) : NULL;
+        NewItem *n;
+
+        if (eq_ci(sname, SYNC_PART_NAME) || (scan_depth == 1 && eq_ci(sname, SYNC_STATE_DIR)))
+            continue;
+        if (e && !(e->flags & ST_FOLDER) != !info.dir)
+            e = NULL;                   /* a file became a folder or the other way */
+        if (e)
+            e->flags |= ST_LOCAL;
+        if (len + (size_t)sep + strlen(sname) >= PATH_SIZE) {
+            rc = AD_ERR;
+            break;
+        }
+        if (sep)
+            spath[len] = '/';
+        strcpy(spath + len + sep, sname);
+
+        if (e && info.dir) {
+            rc = scan_dir(e->id, NULL);
+        } else if (e) {
+            if ((info.size != e->size || info.date != e->ltime) &&
+                !add_item(0, &info, e->parent, NULL, e->id))
+                rc = AD_ERR_NOMEM;
+        } else if (!(n = add_item(info.dir, &info, dir_id, pdir, NULL))) {
+            rc = AD_ERR_NOMEM;
+        } else if (info.dir) {
+            rc = scan_dir(NULL, n);
+        }
+        spath[len] = '\0';
+        if (rc != AD_OK)
+            break;
+    }
+    plat_dir_close(d);
+    scan_depth--;
+    return rc == AD_OK && r < 0 ? AD_ERR : rc;
+}
+
+static long source(void *ud, void *buf, long len)
+{
+    (void)ud;
+    return plat_read(in_file, buf, len);
+}
+
+/* entry for an item made / changed on OneDrive, with its local name */
+static int put_up(GraphItem *it, const char *parent, const char *ln, unsigned long ltime)
+{
+    StEntry *e;
+    int rc;
+
+    if (!it->parent_id[0])
+        strcpy(it->parent_id, parent);
+    strcpy(lname, ln);
+    if ((rc = put_item(it, ltime)) == AD_OK && (e = state_find(st, it->id)) != NULL)
+        e->flags |= ST_LOCAL;
+    return rc;
+}
+
+/* Send the file n->path (new: name in parent; else a new version of id while it has
+ * etag). AD_OK, AD_ERR (item failed, message in ierr) or a fatal code. */
+static int upload(NewItem *n, const char *parent, const char *name, const char *id,
+                  const char *etag)
+{
+    PlatInfo info;
+    const char *tok;
+    int attempt, rc;
+
+    if (plat_file_info(n->path, &info) != AD_OK || info.dir)
+        return SYNC_PENDING;            /* gone since the scan */
+    n->size = info.size;
+    n->date = info.date;
+    if (!up_buf && n->size > 0 && !(up_buf = malloc(GRAPH_CHUNK))) {
+        strcpy(ierr, "out of memory");
+        return AD_ERR_NOMEM;
+    }
+    for (attempt = 0, rc = AD_ERR_AUTH; attempt < 2 && rc == AD_ERR_AUTH; attempt++) {
+        if (!(tok = token(attempt > 0, &rc)))
+            break;
+        if (!(in_file = plat_open_read(n->path))) {
+            strcpy(ierr, "cannot read the file");
+            return AD_ERR;
+        }
+        rc = graph_upload(cfg->graph, cfg->dl, tok, parent, name, id, etag, n->size,
+                          tz_to_utc(cfg->tz, n->date), source, NULL, up_buf, GRAPH_CHUNK,
+                          &up_item, ierr, (int)sizeof(ierr));
+        plat_close(in_file, 0);
+        in_file = NULL;
+    }
+    return rc;
+}
+
+/* a file missing here with this size and date: the item was renamed / moved */
+static StEntry *moved_from(const PlatInfo *info)
+{
+    StEntry *e;
+
+    for (e = state_next(st, NULL); e; e = state_next(st, e))
+        if (!(e->flags & (ST_LOCAL | ST_FOLDER)) && e->size == info->size && e->ltime == info->date)
+            return e;
+    return NULL;
+}
+
+static int push_new(NewItem *n)
+{
+    const char *parent = n->pdir ? n->pdir->id : n->parent_id, *tok, *problem;
+    PlatInfo info;
+    StEntry *m;
+    int attempt, rc;
+
+    if (n->pdir && n->pdir->skip) {
+        n->skip = 1;                    /* its folder was not made: already reported */
+        return AD_OK;
+    }
+    if (!parent || !*parent) {
+        n->skip = 1;
+        fail(n->path, "its folder is not on OneDrive");
+        return AD_OK;
+    }
+    problem = fs_to_utf8(cfg->charset, n->lname, rname, sizeof(rname)) < 0 ? "name too long" :
+              fs_remote_name_problem(rname);
+    if (problem) {
+        n->skip = 1;
+        stats->skipped++;
+        say("Not sent", n->path, problem);
+        return AD_OK;
+    }
+
+    if (n->dir) {
+        WITH_TOKEN(graph_create_folder(cfg->graph, tok, parent, rname, &up_item, ierr, (int)sizeof(ierr)));
+        if (rc == AD_ERR_CONFLICT) {    /* made meanwhile: use it */
+            WITH_TOKEN(graph_child(cfg->graph, tok, parent, rname, &up_item, ierr, (int)sizeof(ierr)));
+            if (rc == AD_OK && !(up_item.flags & GI_FOLDER)) {
+                strcpy(ierr, "a file of this name is on OneDrive");
+                rc = AD_ERR_CONFLICT;
+            }
+        }
+        if (rc == AD_OK) {
+            strcpy(n->id, up_item.id);
+            stats->remote_folders++;
+            say("Created on OneDrive", n->path, NULL);
+            return put_up(&up_item, parent, n->lname, 0);
+        }
+        n->skip = 1;
+        if (fatal(rc))
+            return rc;
+        fail(n->path, ierr);
+        return AD_OK;
+    }
+
+    /* the same size and date as a file missing here: rename / move it there */
+    if (plat_file_info(n->path, &info) == AD_OK && (m = moved_from(&info)) != NULL) {
+        char id[GRAPH_ID_SIZE];
+        int new_name = strcmp(m->name, rname) != 0, new_parent = strcmp(m->parent, parent) != 0;
+
+        strcpy(id, m->id);
+        WITH_TOKEN(graph_move(cfg->graph, tok, id, new_parent ? parent : NULL,
+                              new_name ? rname : NULL, &up_item, ierr, (int)sizeof(ierr)));
+        if (rc == AD_OK) {
+            stats->remote_moved++;
+            say("Moved on OneDrive to", n->path, NULL);
+            return put_up(&up_item, parent, n->lname, info.date);
+        }
+        if (fatal(rc))
+            return rc;                  /* else: send it as a new file */
+    }
+
+    rc = upload(n, parent, rname, NULL, NULL);
+    if (rc == AD_OK) {
+        stats->uploaded++;
+        stats->up_bytes += n->size;
+        sprintf(note, "%lu bytes", n->size);
+        say("Uploaded", n->path, note);
+        return put_up(&up_item, parent, n->lname, n->date);
+    }
+    if (rc == SYNC_PENDING || fatal(rc))
+        return rc == SYNC_PENDING ? AD_OK : rc;
+    fail(n->path, ierr);
+    return AD_OK;
+}
+
+static int push_changed(NewItem *n)
+{
+    char id[GRAPH_ID_SIZE], etag[GRAPH_TAG_SIZE], parent[GRAPH_ID_SIZE], ln[FS_MAXNAME_LONG + 8];
+    StEntry *e = state_find(st, n->mod_id);
+    int rc;
+
+    if (!e)
+        return AD_OK;
+    strcpy(id, e->id);
+    strcpy(etag, e->etag);
+    strcpy(parent, e->parent);
+    strcpy(ln, e->lname);
+    rc = upload(n, parent, NULL, id, etag);
+    if (rc == AD_OK) {
+        stats->uploaded++;
+        stats->up_bytes += n->size;
+        sprintf(note, "%lu bytes", n->size);
+        say("Uploaded new version", n->path, note);
+        return put_up(&up_item, parent, ln, n->date);
+    }
+    if (rc == SYNC_PENDING || fatal(rc))
+        return rc == SYNC_PENDING ? AD_OK : rc;
+    fail(n->path, rc == AD_ERR_CONFLICT ? "changed on OneDrive too, sorted out in the next pass" : ierr);
+    return AD_OK;
+}
+
+/* forget an entry and everything below it */
+static void forget(const char *id)
+{
+    char cid[GRAPH_ID_SIZE];
+    StEntry *c;
+
+    while ((c = find_child(id)) != NULL) {
+        strcpy(cid, c->id);
+        forget(cid);
+    }
+    state_remove(st, id);
+    dirty = 1;
+}
+
+static void mark_local(const char *id)
+{
+    StEntry *e;
+
+    for (e = state_next(st, NULL); e; e = state_next(st, e))
+        if (strcmp(e->parent, id) == 0 && !(e->flags & ST_LOCAL)) {
+            e->flags |= ST_LOCAL;
+            mark_local(e->id);
+        }
+}
+
+/* the topmost entry missing here (its parent is not missing too), or NULL */
+static StEntry *next_missing(void)
+{
+    StEntry *e, *p;
+
+    for (e = state_next(st, NULL); e; e = state_next(st, e))
+        if (!(e->flags & ST_LOCAL) &&
+            (strcmp(e->parent, st->root_id) == 0 || !(p = state_find(st, e->parent)) ||
+             (p->flags & ST_LOCAL)))
+            return e;
+    return NULL;
+}
+
+static int push_deletes(void)
+{
+    char id[GRAPH_ID_SIZE], etag[GRAPH_TAG_SIZE];
+    const char *tok;
+    StEntry *e;
+    int attempt, rc;
+
+    while ((e = next_missing()) != NULL) {
+        strcpy(id, e->id);
+        strcpy(etag, e->etag);
+        if (state_local_path(st, e, cfg->local, target, PATH_SIZE) < 0)
+            strcpy(target, show(e->name));
+        WITH_TOKEN(graph_delete(cfg->graph, tok, id, etag, ierr, (int)sizeof(ierr)));
+        if (rc == AD_OK) {
+            stats->remote_deleted++;
+            say("Deleted on OneDrive", target, NULL);
+            forget(id);
+            continue;
+        }
+        if (fatal(rc))
+            return rc;
+        fail(target, rc == AD_ERR_CONFLICT ? "changed on OneDrive, not deleted" : ierr);
+        e = state_find(st, id);
+        e->flags |= ST_LOCAL;           /* leave it and what is below it */
+        mark_local(id);
+    }
+    return AD_OK;
+}
+
+static int push_changes(void)
+{
+    StEntry *e;
+    NewItem *n;
+    long missing = 0;
+    int rc;
+
+    items_head = NULL;
+    items_tail = &items_head;
+    for (e = state_next(st, NULL); e; e = state_next(st, e))
+        e->flags &= ~(unsigned)ST_LOCAL;
+    if (strlen(cfg->local) >= PATH_SIZE)
+        return AD_OK;
+    strcpy(spath, cfg->local);
+    scan_depth = 0;
+    rc = scan_dir(st->root_id, NULL);
+    if (rc != AD_OK) {
+        free_items();
+        if (rc == AD_ERR_NOMEM) {
+            strcpy(ierr, "out of memory");
+            return rc;
+        }
+        stats->failed++;
+        say("Nothing sent:", cfg->local, "cannot read it completely");
+        return AD_OK;
+    }
+
+    for (n = items_head; n && rc == AD_OK; n = n->next) {
+        if (plat_break()) {
+            rc = AD_ERR_BREAK;
+            break;
+        }
+        rc = n->mod_id ? AD_OK : push_new(n);
+        maybe_save(0);
+    }
+    for (n = items_head; n && rc == AD_OK; n = n->next) {
+        if (plat_break()) {
+            rc = AD_ERR_BREAK;
+            break;
+        }
+        rc = n->mod_id ? push_changed(n) : AD_OK;
+        maybe_save(0);
+    }
+
+    if (rc == AD_OK) {
+        for (e = state_next(st, NULL); e; e = state_next(st, e))
+            missing += !(e->flags & ST_LOCAL);
+        if (missing > SYNC_DELETE_GUARD && missing * 2 > st->count) {
+            sprintf(note, "%ld of %ld items missing here", missing, st->count);
+            say("Warning: nothing deleted on OneDrive,", note,
+                "is the directory complete? Delete them there by hand if this is right");
+        } else {
+            rc = push_deletes();
+        }
+    }
+    free_items();
+    free(up_buf);
+    up_buf = NULL;
+    if (rc == AD_ERR_BREAK)
+        strcpy(ierr, "interrupted");
+    return rc;
+}
+
 /* ---- the pass ------------------------------------------------------------------------- */
 
 static int find_root(GraphItem *root)
@@ -642,6 +1085,8 @@ int sync_run(const SyncConfig *c, State *s, SyncStats *ss, char *err, int errsiz
             dirty = 1;
         }
     }
+    if (rc == AD_OK && cfg->upload)
+        rc = push_changes();
     free_pending(0);
     maybe_save(1);
 

@@ -300,6 +300,62 @@ int plat_file_info(const char *path, PlatInfo *info)
     return AD_OK;
 }
 
+/* directory listing: the entries directly in the directory, in table order */
+struct PlatDir {
+    char path[PATH_SIZE];
+    int next;
+};
+
+static struct PlatDir dirs[16];
+int fake_dir_fail;               /* > 0: the n-th plat_dir_next() from now fails */
+
+PlatDir *plat_dir_open(const char *path)
+{
+    int i = find(path), k;
+
+    if (strchr(path, ':') && path[strlen(path) - 1] == ':')
+        i = -2;                                 /* a volume */
+    if (i == -1 || (i >= 0 && !files[i].dir) || strlen(path) >= PATH_SIZE)
+        return NULL;
+    for (k = 0; k < 16 && dirs[k].path[0]; k++)
+        ;
+    if (k >= 16)
+        return NULL;
+    strcpy(dirs[k].path, path);
+    dirs[k].next = 0;
+    return &dirs[k];
+}
+
+int plat_dir_next(PlatDir *d, char *name, int size, PlatInfo *info)
+{
+    size_t n = strlen(d->path);
+    int sep = d->path[n - 1] != ':';
+
+    if (fake_dir_fail > 0 && --fake_dir_fail == 0)
+        return AD_ERR;
+    for (; d->next < MAX_FILES; d->next++) {
+        const char *p = files[d->next].path, *rest;
+        if (!files[d->next].used || strlen(p) <= n + (size_t)sep || !eq_ci(p, d->path, n) ||
+            (sep && p[n] != '/'))
+            continue;
+        rest = p + n + sep;
+        if (strchr(rest, '/') || (int)strlen(rest) >= size)
+            continue;
+        strcpy(name, rest);
+        info->size = (unsigned long)files[d->next].len;
+        info->date = files[d->next].date;
+        info->dir = files[d->next].dir;
+        d->next++;
+        return 1;
+    }
+    return 0;
+}
+
+void plat_dir_close(PlatDir *d)
+{
+    d->path[0] = '\0';
+}
+
 int plat_set_date(const char *path, unsigned long local_secs)
 {
     int i = find(path);

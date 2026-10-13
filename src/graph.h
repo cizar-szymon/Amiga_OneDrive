@@ -90,6 +90,43 @@ int graph_page(Session *g, const char *access_token, char *link, int size, int *
 int graph_download(Session *g, Session *dl, const char *access_token, const char *item_id,
                    GraphSinkFn sink, void *ud, unsigned long *got, char *err, int errsize);
 
+/* ---- changes (stage 2) -------------------------------------------------------------
+ * Items are addressed by id; names are UTF-8. AD_ERR_CONFLICT: the name is taken
+ * (409) or the item changed on OneDrive since etag (412). */
+
+#define GRAPH_CHUNK 327680L      /* upload pieces must be multiples of 320 KiB */
+
+/* Reads the next len bytes of the file being uploaded. Returns len (less only at the
+ * end of the file) or AD_ERR_*. */
+typedef long (*GraphSourceFn)(void *ud, void *buf, long len);
+
+/* Item name in folder parent_id. AD_ERR_NOTFOUND when there is none. */
+int graph_child(Session *g, const char *access_token, const char *parent_id, const char *name,
+                GraphItem *it, char *err, int errsize);
+
+/* New folder; AD_ERR_CONFLICT when the name is taken. */
+int graph_create_folder(Session *g, const char *access_token, const char *parent_id,
+                        const char *name, GraphItem *it, char *err, int errsize);
+
+/* Rename and / or move (parent_id or name NULL: unchanged). */
+int graph_move(Session *g, const char *access_token, const char *id, const char *parent_id,
+               const char *name, GraphItem *it, char *err, int errsize);
+
+/* Delete (to the OneDrive recycle bin) when it still has etag ("" = any). An item
+ * that is gone already counts as deleted. */
+int graph_delete(Session *g, const char *access_token, const char *id, const char *etag,
+                 char *err, int errsize);
+
+/* Upload a file of size bytes with the date mtime (UTC seconds since 1978): a new file
+ * name in parent_id (id NULL; fails when the name is taken), or a new version of id
+ * while it still has etag. Data comes from src in pieces of up to bufsize bytes
+ * (at least GRAPH_CHUNK) through buf, over ul to the upload server. Ctrl-C between
+ * pieces gives AD_ERR_BREAK. */
+int graph_upload(Session *g, Session *ul, const char *access_token, const char *parent_id,
+                 const char *name, const char *id, const char *etag, unsigned long size,
+                 unsigned long mtime, GraphSourceFn src, void *ud, char *buf, long bufsize,
+                 GraphItem *it, char *err, int errsize);
+
 /* Seconds to wait before retry number attempt (0, 1, ...) when the server gave
  * retry_after (-1 = none). Exposed for the tests. */
 long graph_retry_wait(long retry_after, int attempt);

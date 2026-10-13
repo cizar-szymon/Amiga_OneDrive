@@ -1,6 +1,7 @@
 /* AmiDrive - OneDrive client for AmigaOS: command line, settings, sign-in, self test.
  *
  *   AmiDrive [LOCAL=Work:OneDrive] [REMOTE=/Amiga] [ONCE] [CHARSET=LATIN1|LATIN2]
+ *            [UPLOAD=YES|NO]                 YES: also send the changes made on the Amiga
  *            [INTERVAL=3] [STATE=dir]       synchronise (settings are remembered)
  *   AmiDrive LOGIN          sign in with a device code
  *   AmiDrive LOGOUT         forget the sign-in (deletes the token file)
@@ -36,14 +37,14 @@ size_t __stack = 65536;                 /* OpenSSL needs more than the Shell def
 
 const char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDRIVE_DATE ")";
 
-#define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
+#define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
                  "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K"
-enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
+enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
        ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_COUNT };
 
 /* arguments that are settings, in template order, with their prefs keys */
 static const struct { int arg; const char *key; } setting_args[] = {
-    { ARG_LOCAL, "LOCAL" }, { ARG_REMOTE, "REMOTE" }, { ARG_CHARSET, "CHARSET" },
+    { ARG_LOCAL, "LOCAL" }, { ARG_REMOTE, "REMOTE" }, { ARG_CHARSET, "CHARSET" }, { ARG_UPLOAD, "UPLOAD" },
     { ARG_INTERVAL, "INTERVAL" }, { ARG_STATE, "STATE" }, { ARG_CLIENTID, "CLIENTID" },
     { ARG_TENANT, "TENANT" }
 };
@@ -211,7 +212,8 @@ static int cmd_info(void)
     Printf("%s %s\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_VERSION);
     Printf("Local:     %s\n", (LONG)(cfg.local[0] ? cfg.local : "(not set, use LOCAL=)"));
     Printf("Remote:    %s\n", (LONG)(cfg.remote[0] ? cfg.remote : "(not set, use REMOTE=)"));
-    Printf("Charset:   %s, check every %ld min\n", (LONG)cfg.charset, cfg.interval);
+    Printf("Charset:   %s, check every %ld min, %s\n", (LONG)cfg.charset, cfg.interval,
+           (LONG)(cfg.upload[0] == 'Y' ? "both ways" : "download only (UPLOAD=NO)"));
     if (cfg.state[0])
         Printf("State:     %s\n", (LONG)cfg.state);
     else if (cfg.local[0])
@@ -337,6 +339,7 @@ static int cmd_sync(int once)
     sc.state_file = state_file;
     sc.charset = cs;
     sc.tz = plat_timezone();
+    sc.upload = cfg.upload[0] == 'Y';
     sc.token = sync_token;
     sc.log = sync_log;
 
@@ -356,12 +359,20 @@ static int cmd_sync(int once)
         sess_close(&login_sess);
 
         if (rc == AD_OK) {
-            if (ss.downloaded + ss.moved + ss.deleted + ss.folders + ss.kept + ss.failed == 0)
+            if (ss.downloaded + ss.moved + ss.deleted + ss.folders + ss.kept + ss.failed +
+                ss.uploaded + ss.remote_moved + ss.remote_deleted + ss.remote_folders == 0) {
                 Printf("  no changes\n");
-            else
-                Printf("  %ld downloaded (%lu KB), %ld moved, %ld deleted, %ld new folders, "
-                       "%ld kept, %ld failed\n", ss.downloaded, (ss.bytes + 1023) / 1024, ss.moved,
-                       ss.deleted, ss.folders, ss.kept, ss.failed);
+            } else {
+                Printf("  Amiga:    %ld downloaded (%lu KB), %ld moved, %ld deleted, %ld new folders\n",
+                       ss.downloaded, (ss.bytes + 1023) / 1024, ss.moved, ss.deleted, ss.folders);
+                if (sc.upload)
+                    Printf("  OneDrive: %ld uploaded (%lu KB), %ld moved, %ld deleted, %ld new folders\n",
+                           ss.uploaded, (ss.up_bytes + 1023) / 1024, ss.remote_moved,
+                           ss.remote_deleted, ss.remote_folders);
+                if (ss.kept + ss.failed)
+                    Printf("  %ld kept (changed on the Amiga), %ld failed (tried again next time)\n",
+                           ss.kept, ss.failed);
+            }
         } else {
             print_rc("  Stopped", rc, err);
             if (rc == AD_ERR_BREAK || rc == AD_ERR_AUTH || rc == AD_ERR_NOTFOUND)

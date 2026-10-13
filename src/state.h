@@ -20,7 +20,8 @@
 #define ST_FOLDER   0x01
 
 typedef struct StEntry {
-    struct StEntry *next;           /* hash chain */
+    struct StEntry *next;           /* hash chain by id */
+    struct StEntry *next_name;      /* hash chain by parent + local name */
     unsigned long size;
     unsigned long mtime;            /* remote time, UTC seconds since 1978 */
     unsigned long ltime;            /* date of the local file after the last sync
@@ -37,6 +38,7 @@ typedef struct {
     char delta[GRAPH_LINK_SIZE];    /* "" = start with a full delta */
     char names[16];                 /* how local names were made, e.g. "LATIN2/30" */
     StEntry *bucket[ST_BUCKETS];
+    StEntry *by_name[ST_BUCKETS];
     long count;
 } State;
 
@@ -44,6 +46,9 @@ void state_init(State *s);
 void state_free(State *s);           /* all entries; root_id and delta are kept */
 
 StEntry *state_find(const State *s, const char *id);
+
+/* Entry with this local name (exact, as on the disk) in the folder parent_id. */
+StEntry *state_find_name(const State *s, const char *parent_id, const char *lname);
 
 /* Store a copy of e (next is ignored; NULL strings are stored as ""), replacing an
  * entry with the same id. Returns the stored entry or NULL (out of memory). */

@@ -258,6 +258,58 @@ int plat_file_info(const char *path, PlatInfo *info)
     return rc;
 }
 
+struct PlatDir {
+    BPTR lock;
+    struct FileInfoBlock *fib;
+};
+
+PlatDir *plat_dir_open(const char *path)
+{
+    PlatDir *d = AllocVec(sizeof(*d), MEMF_ANY | MEMF_CLEAR);
+
+    if (!d)
+        return NULL;
+    if ((d->lock = Lock((STRPTR)path, ACCESS_READ)) != 0 &&
+        (d->fib = AllocDosObject(DOS_FIB, NULL)) != NULL &&
+        Examine(d->lock, d->fib) && d->fib->fib_DirEntryType > 0)
+        return d;
+    plat_dir_close(d);
+    return NULL;
+}
+
+int plat_dir_next(PlatDir *d, char *name, int size, PlatInfo *info)
+{
+    for (;;) {
+        LONG type;
+
+        if (!ExNext(d->lock, d->fib))
+            return IoErr() == ERROR_NO_MORE_ENTRIES ? 0 : AD_ERR;
+        type = d->fib->fib_DirEntryType;
+        if (type == ST_SOFTLINK)
+            continue;
+        if ((int)strlen(d->fib->fib_FileName) >= size)
+            return AD_ERR;
+        strcpy(name, d->fib->fib_FileName);
+        info->size = (unsigned long)d->fib->fib_Size;
+        info->date = (unsigned long)d->fib->fib_Date.ds_Days * 86400UL +
+                     (unsigned long)d->fib->fib_Date.ds_Minute * 60UL +
+                     (unsigned long)(d->fib->fib_Date.ds_Tick / TICKS_PER_SECOND);
+        info->dir = type > 0;
+        return 1;
+    }
+}
+
+void plat_dir_close(PlatDir *d)
+{
+    if (!d)
+        return;
+    if (d->fib)
+        FreeDosObject(DOS_FIB, d->fib);
+    if (d->lock)
+        UnLock(d->lock);
+    FreeVec(d);
+}
+
 int plat_set_date(const char *path, unsigned long local_secs)
 {
     struct DateStamp ds;
