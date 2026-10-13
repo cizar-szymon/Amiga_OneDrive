@@ -27,12 +27,12 @@
 | `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki, usuwanie, zmiana nazwy, podfolder); ⏳ przeniesienie, długie nazwy, zagnieżdżenie |
 | `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
 | `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ `ONCE` na A1200; ⏳ praca w tle |
-| Etap 2: wysyłanie, sesje wysyłania, konflikty | ⏳ |
+| Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy); A1200 z kontem Business: nowe pliki ⏳ reszta |
 
 ## Wyniki testów
 
-- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1193 sprawdzeń, 0 błędów.
-- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1193 sprawdzeń, 0 błędów.
+- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1293 sprawdzeń, 0 błędów.
+- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1293 sprawdzeń, 0 błędów.
 - A1200 `LOGIN` z prawdziwym identyfikatorem (14.10.2026): kod na `https://login.microsoft.com/device`,
   logowanie na telefonie/PC, token zapisany; `INFO`: konto firmowe, OneDrive for Business.
   Błąd znaleziony przy tym: `device_code` od Microsoftu ma 1045 znaków, bufor miał 1024
@@ -47,6 +47,9 @@
   zmiana nazwy pliku → zmiana nazwy lokalnie bez pobierania; nowy podfolder utworzony; kopia
   pliku („Kopiuj do”) = nowy element, pobrany. Nie sprawdzone jeszcze: przeniesienie wewnątrz
   folderu, nazwa > 30 znaków, folder w folderze, przeniesienie poza folder.
+- A1200, etap 2 (14.10.2026): pliki dodane na Amidze (`Copy_of_WhichAmiga` 20 KB + `.info`)
+  wysłane do `Retro/AmigaDrive`; następne przejście „no changes” (własne wysyłki wracają
+  w delcie z tym samym cTag).
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
@@ -125,6 +128,28 @@
     zarezerwowane (`.AmiDrive` w korzeniu, `.AmiDrive.part`).
 - **Zmiana sposobu nazw** (`CHARSET`, limit długości): stan pamięta `names` (np. `LATIN2/30`);
   przy zmianie jedno pełne przejście, a zwykłe przenoszenie poprawia nazwy lokalne bez pobierania.
+- **Etap 2 – wysyłanie** (`sync.c`, po etapie 1 w tym samym przejściu):
+  - przegląd `LOCAL` (pomija `.AmiDrive` w korzeniu i `.AmiDrive.part`), porównanie ze stanem
+    po (rodzic, nazwa lokalna): brak wpisu = nowy, inny rozmiar lub data = zmieniony,
+    wpis bez pliku = usunięty na Amidze;
+  - kolejność: nowe foldery i pliki (foldery przed zawartością), potem nowe wersje, potem
+    usunięcia; nowy plik o rozmiarze i dacie brakującego = zmiana nazwy / przeniesienie
+    (`PATCH`, bez wysyłania);
+  - **konflikty bez utraty danych**: zmiany z chmury idą pierwsze, plik zmieniony w obu
+    miejscach dostaje kopię `-Amiga` (wysyłaną potem jako nowy plik); nowa wersja tylko
+    z `If-Match: eTag` (412 → zostaje do następnego przejścia); nowy plik z
+    `conflictBehavior=fail` (409 → w następnym przejściu przychodzi wersja z chmury,
+    lokalna dostaje `-Amiga`); usunięcie z `If-Match` (zmieniony w chmurze → nie usuwa,
+    wraca z chmury);
+  - **ochrona przed masowym usuwaniem**: gdy brakuje > 10 elementów i ponad połowy, nic nie
+    jest usuwane (ostrzeżenie); gdy katalogu nie da się przeczytać w całości – nic nie
+    jest wysyłane ani usuwane; usunięte trafiają do kosza OneDrive;
+  - wysyłanie: `createUploadSession` z datą pliku w `fileSystemInfo`, kawałki 320 KiB
+    (bufor 320 KB tylko na czas wysyłania) do serwera wysyłania **bez tokenu**; pusty plik
+    `PUT` + `PATCH` daty; nazwy z Amigi → UTF-8, nazwy niedozwolone w OneDrive pomijane
+    z komunikatem; bity ochrony i komentarze nie są przenoszone;
+  - zmiany w chmurze wywołane własnymi wysyłkami wracają w delcie z tym samym `cTag`
+    i niczego nie zmieniają.
 - **Limit nazw** z typu woluminu (`Info`): OFS/FFS `DOS\0`–`DOS\5` → 30, reszta (FFS2, SFS, PFS)
   → 107. Na A1200 `SYS:` i `RAM:` dają 30 (bezpiecznie: najwyżej krótsze nazwy).
 - **Rejestracja aplikacji** przez Azure CLI (`az ad app create` + `az rest PATCH` na
@@ -140,8 +165,11 @@
 - Sprawdzone z kontem Business: `deltaLink` zachowuje `$select` i `$top`; delta na podfolderze
   działa (pusty folder, potem przyrostowo 5 plików). Pusty folder w Business nie zwraca
   w delcie samego siebie (nie szkodzi – korzeń bierzemy z `graph_item`).
-- Etap 1: plik usunięty na Amidze nie jest pobierany ponownie, dopóki nie zmieni się w chmurze
-  (etap 2 zamieni to na usunięcie w chmurze).
+- Zmiana nazwy folderu na Amidze nie jest rozpoznawana jako zmiana nazwy: powstaje nowy
+  folder, pliki są do niego przenoszone (`PATCH`, bez wysyłania), stary folder usuwany.
+- Wysyłanie nie jest wznawiane po przerwaniu (plik wysyłany od nowa w następnym przejściu).
+- `UPLOAD=NO`: plik usunięty na Amidze nie jest pobierany ponownie, dopóki nie zmieni się
+  w chmurze.
 - Element, którego folder nadrzędny nie należy do synchronizowanego folderu (np. przeniesiony
   na zewnątrz, jeśli OneDrive nie zgłosi go jako usuniętego), liczony jako błąd – deltaLink stoi.
   Do sprawdzenia z prawdziwym kontem.
