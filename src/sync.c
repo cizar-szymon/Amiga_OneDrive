@@ -580,7 +580,7 @@ int sync_run(const SyncConfig *c, State *s, SyncStats *ss, char *err, int errsiz
 {
     static GraphItem root;
     static char link[GRAPH_LINK_SIZE];
-    char *slash;
+    char *slash, names[16];
     int rc;
 
     cfg = c;
@@ -611,6 +611,16 @@ int sync_run(const SyncConfig *c, State *s, SyncStats *ss, char *err, int errsiz
     if (strcmp(st->root_id, root.id) != 0) {      /* first pass, or another folder */
         state_free(st);
         strcpy(st->root_id, root.id);
+        st->delta[0] = '\0';
+        dirty = 1;
+    }
+    /* another code page or name length: list the whole folder once, every item is then
+     * renamed to its new local name (no download) */
+    sprintf(names, "%s/%d", cfg->charset == FS_LATIN2 ? "LATIN2" : "LATIN1", cfg->maxname);
+    if (strcmp(st->names, names) != 0) {
+        if (st->delta[0])
+            say("Renaming local files:", names, "the code page or name length changed");
+        strcpy(st->names, names);
         st->delta[0] = '\0';
         dirty = 1;
     }

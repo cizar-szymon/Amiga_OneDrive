@@ -238,6 +238,8 @@ int state_save(const State *s, const char *path)
     wfail = 0;
     put_raw(STATE_MAGIC "\nroot");
     put_esc(s->root_id);
+    put_raw("\nnames");
+    put_esc(s->names);
     put_raw("\ndelta");
     put_esc(s->delta);
     put_c('\n');
@@ -353,6 +355,9 @@ static int load_lines(State *s)
         if (n == 2 && strcmp(f[0], "root") == 0) {
             if (!copy_field(s->root_id, sizeof(s->root_id), f[1]))
                 return AD_ERR_PROTO;
+        } else if (n == 2 && strcmp(f[0], "names") == 0) {
+            if (!copy_field(s->names, sizeof(s->names), f[1]))
+                return AD_ERR_PROTO;
         } else if (n == 2 && strcmp(f[0], "delta") == 0) {
             if (!copy_field(s->delta, sizeof(s->delta), f[1]))
                 return AD_ERR_PROTO;
@@ -387,8 +392,7 @@ int state_load(State *s, const char *path)
     int rc;
 
     state_free(s);
-    s->root_id[0] = '\0';
-    s->delta[0] = '\0';
+    s->root_id[0] = s->delta[0] = s->names[0] = '\0';
     if (!(rf = plat_open_read(path)))
         return AD_ERR;
     rpos = rlen = 0;
@@ -396,8 +400,7 @@ int state_load(State *s, const char *path)
     plat_close(rf, 0);
     if (rc != AD_OK) {
         state_free(s);
-        s->root_id[0] = '\0';
-        s->delta[0] = '\0';
+        s->root_id[0] = s->delta[0] = s->names[0] = '\0';
     }
     return rc;
 }

@@ -327,7 +327,41 @@ void test_sync(void)
     CHECK_STR(st.root_id, "ROOT2");
     CHECK(file_is(LOCAL "/b.txt", "abcd"));   /* its files are left alone */
     CHECK(file_is(LOCAL "/q.txt", "q"));
+    CHECK_STR(st.names, "LATIN1/30");
     finish();
+
+    /* ---- the code page changes to LATIN2: names are fixed by renaming, no download ---- */
+    items[0] = item("Q2", "ROOT2", "G\xC4\x99\xC5\x9B.txt", FILE_, 1, "q2");
+    items[1] = NULL;
+    strcpy(gstream, root_json("ROOT2"));
+    strcat(gstream, page("delta", "M2", items));
+    strcat(gstream, DL("q2"));
+    strcpy(dstream, http_resp(200, NULL, "g"));
+    start();
+    CHECK_INT(sync_run(&cfg, &st, &ss, err, sizeof(err)), AD_OK);
+    CHECK_INT(ss.downloaded, 1);
+    CHECK(file_is(path, "g"));                /* LATIN1: "G__~hhhhhh.txt" */
+    finish();
+
+    cfg.charset = FS_LATIN2;
+    items[0] = item("Q1", "ROOT2", "q.txt", FILE_, 1, "q");
+    items[1] = item("Q2", "ROOT2", "G\xC4\x99\xC5\x9B.txt", FILE_, 1, "q2");
+    items[2] = NULL;
+    strcpy(gstream, root_json("ROOT2"));
+    strcat(gstream, page("delta", "M3", items));
+    start();
+    CHECK_INT(sync_run(&cfg, &st, &ss, err, sizeof(err)), AD_OK);
+    CHECK_INT(ss.full, 1);
+    CHECK_INT(ss.downloaded, 0);
+    CHECK_INT(ss.moved, 1);
+    CHECK_INT(ss.deleted, 0);
+    CHECK(fake_file(path, NULL) == NULL);
+    CHECK(file_is(LOCAL "/G\xEA\xB6.txt", "g"));
+    CHECK(file_is(LOCAL "/q.txt", "q"));
+    CHECK_STR(st.names, "LATIN2/30");
+    CHECK(strstr(logbuf, "Renaming local files: LATIN2/30") != NULL);
+    finish();
+    cfg.charset = FS_LATIN1;
 
     state_free(&st);
     fake_fs_reset();

@@ -35,6 +35,7 @@ typedef struct StEntry {
 typedef struct {
     char root_id[GRAPH_ID_SIZE];    /* the synchronised folder */
     char delta[GRAPH_LINK_SIZE];    /* "" = start with a full delta */
+    char names[16];                 /* how local names were made, e.g. "LATIN2/30" */
     StEntry *bucket[ST_BUCKETS];
     long count;
 } State;

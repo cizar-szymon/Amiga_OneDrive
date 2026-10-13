@@ -31,8 +31,8 @@
 
 ## Wyniki testów
 
-- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1178 sprawdzeń, 0 błędów.
-- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1178 sprawdzeń, 0 błędów.
+- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1193 sprawdzeń, 0 błędów.
+- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1193 sprawdzeń, 0 błędów.
 - A1200 `LOGIN` z prawdziwym identyfikatorem (14.10.2026): kod na `https://login.microsoft.com/device`,
   logowanie na telefonie/PC, token zapisany; `INFO`: konto firmowe, OneDrive for Business.
   Błąd znaleziony przy tym: `device_code` od Microsoftu ma 1045 znaków, bufor miał 1024
@@ -42,6 +42,7 @@
   po wgraniu plików przejście przyrostowe pobrało 5 plików (3,6 MB, m.in. ADF-y 880 KB
   i 1,76 MB) z datami z chmury; następne przejście: „no changes”. Nazwa z `ł` przy
   `CHARSET=LATIN1` → `Bry_a1~77bc45.3mf` (hash, zgodnie z zasadą).
+  Po `CHARSET=LATIN2` jedno pełne przejście zmieniło nazwę na `Bryła1.3mf` bez pobierania.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
@@ -118,6 +119,8 @@
   - stan zapisywany co najwyżej co 30 s w trakcie i na końcu, z dotychczasowym deltaLinkiem;
   - pomijane: notesy OneNote, elementy udostępnione z innego dysku, pliki ≥ 4 GB, nazwy
     zarezerwowane (`.AmiDrive` w korzeniu, `.AmiDrive.part`).
+- **Zmiana sposobu nazw** (`CHARSET`, limit długości): stan pamięta `names` (np. `LATIN2/30`);
+  przy zmianie jedno pełne przejście, a zwykłe przenoszenie poprawia nazwy lokalne bez pobierania.
 - **Limit nazw** z typu woluminu (`Info`): OFS/FFS `DOS\0`–`DOS\5` → 30, reszta (FFS2, SFS, PFS)
   → 107. Na A1200 `SYS:` i `RAM:` dają 30 (bezpiecznie: najwyżej krótsze nazwy).
 - **Rejestracja aplikacji** przez Azure CLI (`az ad app create` + `az rest PATCH` na

@@ -96,6 +96,7 @@ static void test_file(void)
 
     /* names with tabs, newlines and backslashes; an empty parent */
     strcpy(s.delta, "https://graph.microsoft.com/v1.0/me/drive/root/delta?token=a\\b");
+    strcpy(s.names, "LATIN2/30");
     CHECK(add(&s, "T!7", "R!1", "tab\there\nnl\\bs", "tab_here", 0, 7) != NULL);
     CHECK(add(&s, "Z!0", "", "noparent", "noparent", 0, 0) != NULL);
     CHECK_INT(state_save(&s, "W:.AmiDrive/state"), AD_OK);
@@ -105,6 +106,7 @@ static void test_file(void)
     CHECK_INT(t.count, s.count);
     CHECK_STR(t.root_id, "R!1");
     CHECK_STR(t.delta, s.delta);
+    CHECK_STR(t.names, "LATIN2/30");
     e = state_find(&t, "T!7");
     CHECK(e != NULL);
     if (e) {
