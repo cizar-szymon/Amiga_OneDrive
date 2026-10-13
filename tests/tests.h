@@ -40,6 +40,7 @@ void test_tz(void);
 void test_session(void);
 void test_config(void);
 void test_auth(void);
+void test_graph(void);
 
 /* fake_net.c */
 struct NetConn;
@@ -48,10 +49,12 @@ void fake_server(const char *const *streams, long chunk);       /* stream per ne
 const char *fake_sent(struct NetConn *c);
 int fake_is_open(struct NetConn *c);
 extern int fake_connects;
+extern char fake_host[128];
 
 /* fake_plat.c */
 extern unsigned long fake_time;
 extern long fake_slept;
+extern int fake_break_in;
 
 /* tests.c: "HTTP/1.1 <status> X\r\nContent-Length: n\r\n\r\n<body>" (static ring of buffers) */
 const char *http_resp(int status, const char *extra_headers, const char *body);

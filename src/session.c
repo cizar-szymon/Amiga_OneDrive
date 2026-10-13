@@ -24,6 +24,19 @@ void sess_close(Session *s)
     }
 }
 
+int sess_set_host(Session *s, const char *host, int len)
+{
+    if (len <= 0 || len >= (int)sizeof(s->host_buf))
+        return AD_ERR_TOOBIG;
+    if (s->host && (int)strlen(s->host) == len && memcmp(s->host, host, (size_t)len) == 0)
+        return AD_OK;
+    sess_close(s);
+    memcpy(s->host_buf, host, (size_t)len);
+    s->host_buf[len] = '\0';
+    s->host = s->host_buf;
+    return AD_OK;
+}
+
 static int connect_now(Session *s)
 {
     s->conn = net_connect(s->host, 443, SESS_TIMEOUT, s->err, (int)sizeof(s->err));

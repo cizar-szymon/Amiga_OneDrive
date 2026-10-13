@@ -24,6 +24,7 @@ static int nscripts, nconns;
 static long script_chunk = 7;
 
 int fake_connects;
+char fake_host[128];             /* host of the last net_connect() */
 
 static struct NetConn *new_conn(const char *data, long chunk)
 {
@@ -63,7 +64,8 @@ const char *fake_sent(struct NetConn *c)
 
 NetConn *net_connect(const char *host, int port, long timeout_secs, char *err, int errsize)
 {
-    (void)host; (void)port; (void)timeout_secs;
+    (void)port; (void)timeout_secs;
+    strncpy(fake_host, host, sizeof(fake_host) - 1);
     if (fake_connects >= nscripts) {
         strncpy(err, "connection refused", (size_t)errsize - 1);
         err[errsize - 1] = '\0';

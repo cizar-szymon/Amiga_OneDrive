@@ -16,6 +16,7 @@
 
 typedef struct {
     const char *host;
+    char        host_buf[128];   /* host set with sess_set_host() */
     NetConn    *conn;
     int         fresh;           /* connection not used for a request yet */
     Http        http;
@@ -24,6 +25,11 @@ typedef struct {
 
 void sess_init(Session *s, const char *host);
 void sess_close(Session *s);
+
+/* Point the session at another host (copied), e.g. the download server of a
+ * redirect. The connection is kept when the host stays the same.
+ * Returns AD_OK or AD_ERR_TOOBIG. */
+int sess_set_host(Session *s, const char *host, int len);
 
 /* Send a request and read the response headers. Returns AD_OK (any HTTP status),
  * or AD_ERR_NET / AD_ERR_TLS / AD_ERR_PROTO / AD_ERR_BREAK with s->err set. */

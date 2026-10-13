@@ -17,6 +17,7 @@ static struct {
 
 unsigned long fake_time = 1500000000UL;   /* 2025 */
 long fake_slept;
+int fake_break_in;               /* > 0: the n-th plat_break() from now sees Ctrl-C */
 
 unsigned long plat_now(void)
 {
@@ -32,7 +33,7 @@ int plat_sleep(long secs)
 
 int plat_break(void)
 {
-    return 0;
+    return fake_break_in > 0 && --fake_break_in == 0;
 }
 
 static int find(const char *path)

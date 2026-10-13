@@ -43,7 +43,7 @@ $(OBJ):
 TOUT  := build/amiga/AmiDriveTests
 TSRCS := src/http.c src/json.c src/fsmap.c src/tz.c src/session.c src/config.c src/auth.c \
          src/graph.c tests/tests.c tests/test_http.c tests/test_json.c tests/test_fsmap.c \
-         tests/test_tz.c tests/test_session.c tests/test_config.c tests/test_auth.c \
+         tests/test_tz.c tests/test_session.c tests/test_config.c tests/test_auth.c tests/test_graph.c \
          tests/fake_net.c tests/fake_plat.c
 
 tests: $(TOUT)

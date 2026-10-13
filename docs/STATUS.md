@@ -19,7 +19,7 @@
 | `auth.c`: device code flow, odświeżanie (rotacja refresh tokenu), zapis w `ENVARC:AmiDrive/token` | ✅ testy; na A1200 do serwera Microsoftu dochodzi, **czeka na identyfikator aplikacji (CLIENTID)** |
 | `LOGIN`, `LOGOUT`, `INFO` (właściciel i zajętość OneDrive) | ✅ kod, ⏳ test z prawdziwym kontem |
 | `graph.c`: `/me/drive` | ✅ testy |
-| `graph.c`: delta, children, pobieranie (302 → inny host), stronicowanie, 429/503 | ⏳ |
+| `graph.c`: element po ścieżce, delta i children stronami (`nextLink`/`deltaLink`), pobieranie strumieniowe (302 → serwer plików), ponowienia 429/5xx, 404/410 | ✅ testy + A1200 (atrapy), ⏳ prawdziwe konto |
 | Start z ikony (Tool Types, `WINDOW`, dziennik), praca w tle co `INTERVAL` | ⏳ |
 | `state.c`: baza stanu, zapis atomowy | ⏳ |
 | `sync.c`: etap 1 – pobieranie zmian | ⏳ |
@@ -27,8 +27,8 @@
 
 ## Wyniki testów
 
-- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 618 sprawdzeń, 0 błędów.
-- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 618 sprawdzeń, 0 błędów.
+- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 707 sprawdzeń, 0 błędów.
+- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 707 sprawdzeń, 0 błędów.
 - A1200 `LOGIN` z fikcyjnym `CLIENTID`: odpowiedź Microsoftu `AADSTS700038 ... is not a valid
   application identifier` – zapytanie dochodzi i jest poprawne, brakuje tylko rejestracji aplikacji.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
@@ -65,9 +65,27 @@
 - **JSON**: jsmn potrzebuje całej odpowiedzi w pamięci. Strony delta trzeba więc zmniejszyć:
   `$select` tylko z potrzebnymi polami, umiarkowany rozmiar strony; jedna strona naraz.
 - **Moduł `tz.c`** wydzielony z `fsmap.c` (daty i strefy to osobna, dobrze testowalna logika).
+- **Graph: elementy po `id`** (`graph.c`): odpowiedzi delta nie zawierają `parentReference.path`
+  (zmiana nazwy folderu nie zwraca jego zawartości), więc stan śledzi `id` i `parentReference.id`,
+  a ścieżki lokalne składa `sync.c`. Czas pliku z `fileSystemInfo.lastModifiedDateTime` (czas
+  nadany przez program, który zapisał plik), gdy brak – czas serwera.
+- **Strona delta w pamięci w całości**: `$select` z potrzebnymi polami, `$top=20`; bufor 48 KB
+  + 2048 żetonów jsmn (32 KB). Pominięte elementy: bez `id`; flagi dla `package` (OneNote),
+  `remoteItem` (udostępnione z innego dysku), ≥ 4 GB, nazw dłuższych niż bufor.
+- **Ponowienia**: 429, 500, 502, 503, 504 – czekanie według `Retry-After` (najwyżej 10 min),
+  bez niego 2, 4, 8, 16 s; 5 prób; Ctrl-C przerywa czekanie. 404 → `AD_ERR_NOTFOUND`,
+  410 → `AD_ERR_GONE` (pełna delta od nowa), 401 → `AD_ERR_AUTH` (odświeżyć token, powtórzyć).
+- **Pobieranie**: `/content` odpowiada 302 na adres serwera plików (inny host, osobna sesja
+  z keep-alive). Tam **bez tokenu** – adres sam daje dostęp; tylko `https://`, port 443.
 - Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.
 
 ## Znane ograniczenia / do zrobienia
+
+- Do sprawdzenia z prawdziwym kontem: czy `nextLink`/`deltaLink` zachowują `$select` i `$top`
+  (jeśli nie, strony mogą przekroczyć 48 KB – wtedy dopisywać parametry do linku).
+- OneDrive for Business: delta na podfolderze może nie działać (wtedy delta od korzenia
+  i filtrowanie po przodkach w stanie).
+- Pobieranie nie wznawia przerwanych plików (nagłówek `Range`) – plik pobierany od nowa.
 
 - Nazwy w Unicode NFD (np. z macOS: litera + znak łączący) dają `_` zamiast litery z ogonkiem –
   można dodać składanie najczęstszych znaków.
