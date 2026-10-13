@@ -24,7 +24,7 @@
 | Start z ikony (Tool Types, `WINDOW`, dziennik `.AmiDrive/AmiDrive.log`) | ⏳ |
 | `state.c`: baza stanu po `id` (ścieżki z łańcucha rodziców), plik tekstowy zapisywany strumieniowo do `.new` i podmieniany, linia końcowa | ✅ testy + A1200 (`AmiDrive TEST` zapisuje i czyta stan w `T:`) |
 | `plat`: strumieniowe pliki (`plat_open_read/write`, `plat_close` z podmianą) | ✅ A1200 |
-| `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki); ⏳ zmiany nazw, usuwanie, podfoldery na prawdziwym koncie |
+| `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki, usuwanie, zmiana nazwy, podfolder); ⏳ przeniesienie, długie nazwy, zagnieżdżenie |
 | `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
 | `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ `ONCE` na A1200; ⏳ praca w tle |
 | Etap 2: wysyłanie, sesje wysyłania, konflikty | ⏳ |
@@ -43,6 +43,10 @@
   i 1,76 MB) z datami z chmury; następne przejście: „no changes”. Nazwa z `ł` przy
   `CHARSET=LATIN1` → `Bry_a1~77bc45.3mf` (hash, zgodnie z zasadą).
   Po `CHARSET=LATIN2` jedno pełne przejście zmieniło nazwę na `Bryła1.3mf` bez pobierania.
+  Dalej (14.10.2026): usunięcie 5 plików w chmurze → usunięte lokalnie; 2 nowe pliki pobrane;
+  zmiana nazwy pliku → zmiana nazwy lokalnie bez pobierania; nowy podfolder utworzony; kopia
+  pliku („Kopiuj do”) = nowy element, pobrany. Nie sprawdzone jeszcze: przeniesienie wewnątrz
+  folderu, nazwa > 30 znaków, folder w folderze, przeniesienie poza folder.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
