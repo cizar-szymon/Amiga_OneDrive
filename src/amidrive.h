@@ -29,9 +29,11 @@ enum {
 };
 
 /* Application (client) ID of the AmiDrive registration in Microsoft Entra ID
- * ("public client", device code flow). Can be overridden with CLIENTID=. */
+ * (tenant cslabsc.onmicrosoft.com, 14.10.2026): public client, personal and work
+ * accounts, delegated Files.ReadWrite + offline_access. Not a secret.
+ * An organisation with its own registration overrides it with CLIENTID=. */
 #ifndef AMIDRIVE_CLIENT_ID
-#define AMIDRIVE_CLIENT_ID ""
+#define AMIDRIVE_CLIENT_ID "0474e444-3266-446b-b49c-d47a01cadf56"
 #endif
 
 /* Directory for sign-in: "common" (personal + work accounts), "consumers", "organizations". */

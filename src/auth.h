@@ -18,7 +18,7 @@
 #define AUTH_SCOPE      "Files.ReadWrite offline_access"
 
 typedef struct {
-    char device_code[1024];
+    char device_code[AUTH_TOKEN_SIZE];   /* Microsoft sends ~1 KB and more */
     char user_code[32];
     char uri[128];
     long expires_in;             /* seconds the code is valid */

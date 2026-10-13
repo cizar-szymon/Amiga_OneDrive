@@ -78,6 +78,30 @@ void test_auth(void)
                                     "&device_code=DAQABAAEAAAB-dev%21code") != NULL);
     CHECK(t0 + 30 == fake_time);
 
+    /* real device codes are longer than 1 KB (1045 characters seen on 14.10.2026) */
+    {
+        static char code[1501], json[1800];
+        static AuthTokens saved;
+        int i;
+        saved = t;
+        for (i = 0; i < 1500; i++)
+            code[i] = "ABCDEFGHabcdefgh0123456789-_"[i % 28];
+        code[1500] = '\0';
+        sprintf(json, "{\"user_code\":\"ABCD1234\",\"device_code\":\"%s\","
+                      "\"verification_uri\":\"https://login.microsoft.com/device\","
+                      "\"expires_in\":900,\"interval\":5}", code);
+        streams[0] = cat2(http_resp(200, NULL, json), token_ok("R2"));
+        fake_server(streams, 64);
+        sess_close(&s);
+        CHECK_INT(auth_device_start(&s, &app, &d, err, sizeof(err)), AD_OK);
+        CHECK_INT(strlen(d.device_code), 1500);
+        CHECK_STR(d.uri, "https://login.microsoft.com/device");
+        CHECK_INT(auth_device_wait(&s, &app, &d, &t, err, sizeof(err)), AD_OK);
+        CHECK(strstr(fake_sent(s.conn), code) != NULL);
+        CHECK_STR(t.refresh, "R2");
+        t = saved;
+    }
+
     /* declined, expired code */
     streams[0] = http_resp(400, NULL, "{\"error\":\"authorization_declined\"}");
     fake_server(streams, 64);

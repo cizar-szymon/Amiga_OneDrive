@@ -16,8 +16,9 @@
 | `session.c`: trwałe połączenie na host, ponowienie na nowym połączeniu, gdy serwer zamknął bezczynne | ✅ testy + A1200 |
 | `config.c`: `AmiDrive.prefs` (`KLUCZ=wartość`), argumenty zapisywane | ✅ testy + A1200 |
 | `plat_amiga.c`: czas UTC, czekanie z Ctrl-C, bezpieczny zapis plików (`.new` + rename) | ✅ A1200 |
-| `auth.c`: device code flow, odświeżanie (rotacja refresh tokenu), zapis w `ENVARC:AmiDrive/token` | ✅ testy; na A1200 do serwera Microsoftu dochodzi, **czeka na identyfikator aplikacji (CLIENTID)** |
-| `LOGIN`, `LOGOUT`, `INFO` (właściciel i zajętość OneDrive) | ✅ kod, ⏳ test z prawdziwym kontem |
+| Rejestracja aplikacji w Entra (dzierżawa `cslabsc`, Azure CLI): client ID `0474e444-3266-446b-b49c-d47a01cadf56`, konta prywatne i firmowe, public client, `Files.ReadWrite` + `offline_access` | ✅ 14.10.2026 |
+| `auth.c`: device code flow, odświeżanie (rotacja refresh tokenu), zapis w `ENVARC:AmiDrive/token` | ✅ testy + A1200 z prawdziwym kontem |
+| `LOGIN`, `LOGOUT`, `INFO` (właściciel i zajętość OneDrive) | ✅ A1200, konto firmowe (OneDrive for Business) |
 | `graph.c`: `/me/drive` | ✅ testy |
 | `graph.c`: element po ścieżce, delta i children stronami (`nextLink`/`deltaLink`), pobieranie strumieniowe (302 → serwer plików), ponowienia 429/5xx, 404/410 | ✅ testy + A1200 (atrapy), ⏳ prawdziwe konto |
 | Start z ikony (Tool Types, `WINDOW`, dziennik `.AmiDrive/AmiDrive.log`) | ⏳ |
@@ -30,10 +31,12 @@
 
 ## Wyniki testów
 
-- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1172 sprawdzeń, 0 błędów.
-- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1172 sprawdzeń, 0 błędów.
-- A1200 `LOGIN` z fikcyjnym `CLIENTID`: odpowiedź Microsoftu `AADSTS700038 ... is not a valid
-  application identifier` – zapytanie dochodzi i jest poprawne, brakuje tylko rejestracji aplikacji.
+- PC (`make -f Makefile.host test`, gcc `-Wall -Wextra -pedantic`): 1178 sprawdzeń, 0 błędów.
+- A1200 (`AmiDriveTests`, ten sam zestaw skompilowany vbcc): 1178 sprawdzeń, 0 błędów.
+- A1200 `LOGIN` z prawdziwym identyfikatorem (14.10.2026): kod na `https://login.microsoft.com/device`,
+  logowanie na telefonie/PC, token zapisany; `INFO`: konto firmowe, OneDrive for Business.
+  Błąd znaleziony przy tym: `device_code` od Microsoftu ma 1045 znaków, bufor miał 1024
+  („incomplete device code answer”) – teraz `AUTH_TOKEN_SIZE` (4096), test z kodem 1500 znaków.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
@@ -112,6 +115,12 @@
     zarezerwowane (`.AmiDrive` w korzeniu, `.AmiDrive.part`).
 - **Limit nazw** z typu woluminu (`Info`): OFS/FFS `DOS\0`–`DOS\5` → 30, reszta (FFS2, SFS, PFS)
   → 107. Na A1200 `SYS:` i `RAM:` dają 30 (bezpiecznie: najwyżej krótsze nazwy).
+- **Rejestracja aplikacji** przez Azure CLI (`az ad app create` + `az rest PATCH` na
+  `api.requestedAccessTokenVersion=2` i `signInAudience=AzureADandPersonalMicrosoftAccount`;
+  portal Entra kierował logowanie do obcej dzierżawy „Microsoft Services”, AADSTS50020).
+  Identyfikator wpisany jako domyślny `AMIDRIVE_CLIENT_ID`; `CLIENTID=` dla organizacji
+  z własną rejestracją. Konta firmowe innych organizacji mogą wymagać zgody administratora
+  albo weryfikacji wydawcy (Publisher verification).
 - Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.
 
 ## Znane ograniczenia / do zrobienia
