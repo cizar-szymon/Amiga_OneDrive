@@ -42,14 +42,14 @@ static char lines[2][160];          /* above and below the bar */
 static int percent = -1;
 static struct Menu *menus;
 static char acct_label[3][80];          /* "1  Jan Kowalski", "2  (empty)" */
-static int acct_active = 1, acct_signed = 1;
+static int acct_active = 1, acct_signed = 1, acct_start;
 static int menu_pick;                   /* the last item picked, 0 = none */
 static char title[48] = "OneDrive " AMIDRIVE_VERSION;
 
 /* The menu "Account": the 3 accounts (the active one checked), Sign in..., Sign out. */
 static void make_menu(void)
 {
-    struct NewMenu nm[8];
+    struct NewMenu nm[11];
     int i;
 
     if (!win)
@@ -69,13 +69,19 @@ static void make_menu(void)
     nm[4].nm_Type = NM_ITEM;
     nm[4].nm_Label = NM_BARLABEL;
     nm[5].nm_Type = NM_ITEM;
-    nm[5].nm_Label = (STRPTR)"Sign in...";
-    nm[5].nm_UserData = (APTR)(LONG)STATUS_M_SIGNIN;
+    nm[5].nm_Label = (STRPTR)"Start with this account";
+    nm[5].nm_Flags = CHECKIT | MENUTOGGLE | (acct_start == acct_active ? CHECKED : 0);
+    nm[5].nm_UserData = (APTR)(LONG)STATUS_M_START;
     nm[6].nm_Type = NM_ITEM;
-    nm[6].nm_Label = (STRPTR)"Sign out";
-    nm[6].nm_Flags = acct_signed ? 0 : NM_ITEMDISABLED;
-    nm[6].nm_UserData = (APTR)(LONG)STATUS_M_SIGNOUT;
-    nm[7].nm_Type = NM_END;
+    nm[6].nm_Label = NM_BARLABEL;
+    nm[7].nm_Type = NM_ITEM;
+    nm[7].nm_Label = (STRPTR)"Sign in...";
+    nm[7].nm_UserData = (APTR)(LONG)STATUS_M_SIGNIN;
+    nm[8].nm_Type = NM_ITEM;
+    nm[8].nm_Label = (STRPTR)"Sign out";
+    nm[8].nm_Flags = acct_signed ? 0 : NM_ITEMDISABLED;
+    nm[8].nm_UserData = (APTR)(LONG)STATUS_M_SIGNOUT;
+    nm[9].nm_Type = NM_END;
 
     if (menus) {
         ClearMenuStrip(win);
@@ -92,17 +98,21 @@ static void make_menu(void)
     }
 }
 
-void status_accounts(const char *const names[3], int active, int signed_in)
+void status_accounts(const char *const names[3], int active, int signed_in, int start)
 {
     int i;
 
-    for (i = 0; i < 3; i++)
+    for (i = 0; i < 3; i++) {
         if (names[i] && names[i][0])
-            sprintf(acct_label[i], "%d  %.70s", i + 1, names[i]);
+            sprintf(acct_label[i], "%d  %.60s", i + 1, names[i]);
         else
             sprintf(acct_label[i], "%d  (empty)", i + 1);
+        if (start == i + 1)
+            strcat(acct_label[i], "  (start)");
+    }
     acct_active = active;
     acct_signed = signed_in;
+    acct_start = start;
     if (active > 1)
         sprintf(title, "OneDrive %d - %s", active, AMIDRIVE_VERSION);
     else

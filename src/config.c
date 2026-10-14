@@ -144,6 +144,12 @@ int config_set(Config *c, const char *key, const char *value)
         c->account = value[0] - '0';
         return AD_OK;
     }
+    if (eq_ci(key, "START")) {          /* 0: the last account used */
+        if (value[0] < '0' || value[0] > '0' + CFG_ACCOUNTS || value[1])
+            return AD_ERR_PROTO;
+        c->start = value[0] - '0';
+        return AD_OK;
+    }
     if (eq_ci(key, "NAME"))
         return copy(c->name, sizeof(c->name), value) ? AD_ERR_PROTO : AD_OK;
     if (eq_ci(key, "INTERVAL"))
@@ -159,7 +165,7 @@ int config_set(Config *c, const char *key, const char *value)
 int config_parse(Config *c, const char *text)
 {
     static const char *const keys[] = {
-        "LOCAL", "REMOTE", "STATE", "CHARSET", "UPLOAD", "APPICON", "CLOCK", "INTERVAL", "CLIENTID", "ACCOUNT", "NAME",
+        "LOCAL", "REMOTE", "STATE", "CHARSET", "UPLOAD", "APPICON", "CLOCK", "INTERVAL", "CLIENTID", "ACCOUNT", "START", "NAME",
         "TENANT", NULL
     };
     char value[CFG_PATH_SIZE];
@@ -219,6 +225,7 @@ int config_format(const Config *c, char *buf, size_t size)
         !append(buf, size, &len, "CLIENTID", c->client_id) ||
         !append(buf, size, &len, "TENANT", c->tenant) ||
         !append(buf, size, &len, "ACCOUNT", c->account == 2 ? "2" : c->account == 3 ? "3" : "1") ||
+        !append(buf, size, &len, "START", c->start == 1 ? "1" : c->start == 2 ? "2" : c->start == 3 ? "3" : "0") ||
         !append(buf, size, &len, "NAME", c->name))
         return AD_ERR_TOOBIG;
     return (int)len;

@@ -28,7 +28,7 @@ Technika: C (vbcc), `bsdsocket.library` (Roadshow), AmiSSL 5 (OpenSSL 3), własn
 z keep-alive, parser JSON jsmn, Microsoft Graph API (`/delta`, pobieranie, wysyłanie w sesjach).
 Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawem testów.
 
-**Stan (wersja 0.4.0):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
+**Stan (wersja 0.4.1):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
 (OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
 start z ikony, autostart z `WBStartup`, ikona „OneDrive” na pulpicie Workbencha.
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
@@ -68,6 +68,8 @@ AmiDrive CLOCK=ASK|AUTO|NO            zły zegar: okno z pytaniem / ustaw sam / 
 AmiDrive SETCLOCK                     ustawia zegar Amigi (i zegar z baterią) z internetu
 AmiDrive ACCOUNT=2 [LOGIN]            konto OneDrive 1..3 (zapamiętywane); każde z własnym
                                       logowaniem, LOCAL i REMOTE; w oknie menu „Account”
+AmiDrive START=1                      zawsze start z konta 1 (0: z ostatnio używanego);
+                                      w menu „Start with this account”
 AmiDrive TEST                         sprawdza zegar, strefę czasową, DNS, TLS i HTTP
 AmiDrive TEST URL=https://… [TO=plik] szybkość pobierania tego klienta (http:// bez TLS dla porównania)
 AmiDrive TEST HOST=badssl.com         to samo dla innego serwera (sprawdzanie certyfikatów)

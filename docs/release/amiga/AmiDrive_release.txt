@@ -5,6 +5,12 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.4.1 (14.10.2026)
+------------------
+- Menu "Account": "Start with this account" - konto, od którego AmiDrive
+  zawsze zaczyna (oznaczone "(start)"); bez tego - ostatnio używane.
+  W Shellu START=1..3 (0 - ostatnio używane).
+
 0.4.0 (14.10.2026)
 ------------------
 - Do 3 kont OneDrive (np. firmowe i prywatne), jedno aktywne: menu

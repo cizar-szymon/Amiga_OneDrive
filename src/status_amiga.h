@@ -20,6 +20,7 @@
 /* status_menu() results: 1..3 an account, or: */
 #define STATUS_M_SIGNIN  10
 #define STATUS_M_SIGNOUT 11
+#define STATUS_M_START   12             /* "Start with this account" */
 
 /* Where the window opens (outer size) on the Workbench screen; the drawer with the
  * files is placed below it, as wide. Returns 0 without a screen. */
@@ -38,8 +39,10 @@ ULONG status_signal(void);
 int status_handle(void);
 
 /* The menu "Account": names of the 3 accounts (NULL / "" = empty), the active one,
- * whether it is signed in ("Sign out" disabled when not). Also the window title. */
-void status_accounts(const char *const names[3], int active, int signed_in);
+ * whether it is signed in ("Sign out" disabled when not), the account to start with
+ * (0 = the last used; marked "(start)", "Start with this account" checked when it is
+ * the active one). Also the window title. */
+void status_accounts(const char *const names[3], int active, int signed_in, int start);
 
 /* The last menu item picked (then 0). */
 int status_menu(void);

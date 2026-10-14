@@ -5,6 +5,12 @@ Reporting bugs: give the version (in a Shell: Version AmiDrive) and attach
 the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
 
 
+0.4.1 (14.10.2026)
+------------------
+- Menu "Account": "Start with this account" - the account AmiDrive always
+  starts with (marked "(start)"); without it - the last one used. In a Shell
+  START=1..3 (0 - the last one used).
+
 0.4.0 (14.10.2026)
 ------------------
 - Up to 3 OneDrive accounts (e.g. work and personal), one active: menu

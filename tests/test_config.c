@@ -99,6 +99,24 @@ void test_config(void)
         CHECK_STR(u.charset, "LATIN2");             /* kept */
     }
     CHECK_INT(config_set(&c, "ACCOUNT", "1"), AD_OK);
+
+    /* START: 0 (the last account used) or 1..3 */
+    CHECK_INT(c.start, 0);
+    CHECK_INT(config_set(&c, "START", "2"), AD_OK);
+    CHECK_INT(c.start, 2);
+    CHECK_INT(config_set(&c, "START", "4"), AD_ERR_PROTO);
+    CHECK_INT(c.start, 2);
+    {
+        char t[1024];
+        Config u;
+        CHECK(config_format(&c, t, sizeof(t)) > 0);
+        CHECK(strstr(t, "START=2\n") != NULL);
+        config_defaults(&u);
+        CHECK_INT(config_parse(&u, t), AD_OK);
+        CHECK_INT(u.start, 2);
+    }
+    CHECK_INT(config_set(&c, "START", "0"), AD_OK);
+    CHECK_INT(c.start, 0);
     CHECK_INT(config_set(&c, "NAME", ""), AD_OK);
     CHECK_INT(config_set(&c, "LOCAL", ""), AD_OK);
     CHECK_INT(config_set(&c, "REMOTE", ""), AD_OK);

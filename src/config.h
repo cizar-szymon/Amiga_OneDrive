@@ -30,6 +30,7 @@ typedef struct {
     char client_id[48];
     char tenant[40];
     int account;                        /* the active account, 1..CFG_ACCOUNTS */
+    int start;                          /* the account to start with, 0 = the last one used */
     char name[64];                      /* the account as shown (owner of the OneDrive) */
 } Config;
 

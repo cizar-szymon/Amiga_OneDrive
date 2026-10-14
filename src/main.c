@@ -13,6 +13,7 @@
  *                           (plain TCP) against https:// (TLS), same code and buffers
  *   AmiDrive STOP           stop the AmiDrive running in the background (waits for it)
  *   AmiDrive SETCLOCK       set the Amiga clock (and battery clock) from the Internet
+ *   AmiDrive START=n        start with account n (0: the last one used)
  *   AmiDrive ACCOUNT=n ...  the OneDrive account 1..3 to use (remembered); each has its
  *                           own sign-in, LOCAL and REMOTE (menu "Account" of the window)
  *            [CLOCK=ASK|AUTO|NO]            wrong clock: window / set it / nothing
@@ -73,10 +74,10 @@ char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDR
 
 #define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
                  "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K,CLOCK/K,SETCLOCK/S," \
-                 "URL/K,TO/K,RCVBUF/K/N,ACCOUNT/K"
+                 "URL/K,TO/K,RCVBUF/K/N,ACCOUNT/K,START/K"
 enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
        ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_WINDOW, ARG_STOP, ARG_APPICON,
-       ARG_CLOCK, ARG_SETCLOCK, ARG_URL, ARG_TO, ARG_RCVBUF, ARG_ACCOUNT,
+       ARG_CLOCK, ARG_SETCLOCK, ARG_URL, ARG_TO, ARG_RCVBUF, ARG_ACCOUNT, ARG_START,
        ARG_COUNT };
 
 /* the output window when started from Workbench: opens on the first output */
@@ -89,7 +90,8 @@ enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, A
 static const struct { int arg; const char *key; } setting_args[] = {
     { ARG_LOCAL, "LOCAL" }, { ARG_REMOTE, "REMOTE" }, { ARG_CHARSET, "CHARSET" }, { ARG_UPLOAD, "UPLOAD" },
     { ARG_INTERVAL, "INTERVAL" }, { ARG_STATE, "STATE" }, { ARG_CLIENTID, "CLIENTID" },
-    { ARG_TENANT, "TENANT" }, { ARG_APPICON, "APPICON" }, { ARG_CLOCK, "CLOCK" }
+    { ARG_TENANT, "TENANT" }, { ARG_APPICON, "APPICON" }, { ARG_CLOCK, "CLOCK" },
+    { ARG_START, "START" }
 };
 
 struct LocaleBase *LocaleBase;
@@ -111,6 +113,7 @@ static char tzsrc[80];                  /* where the time zone comes from: "TZ=.
 static char token_file[48];             /* the active account's token */
 static int signed_in = 1;               /* the active account has a token */
 static int pending;                     /* a menu choice to do: 1..3 account, STATUS_M_SIGNIN/OUT */
+static int start_toggle_req;            /* "Start with this account" picked: done in the loop */
 static char progname[108];              /* our program file (image of the AppIcon) */
 
 /* ---- output: the Shell or the window, and the log ------------------------------- */
@@ -305,6 +308,8 @@ static int load_settings(LONG *args, int *changed)
         say("Warning: invalid values in %s were ignored\n", (LONG)CFG_PREFS_FILE);
 
     *changed = 0;
+    if (cfg.start && !args[ARG_ACCOUNT])
+        cfg.account = cfg.start;        /* "Start with this account" */
     if (args[ARG_ACCOUNT]) {            /* first: the other arguments are for that account */
         if (config_set(&cfg, "ACCOUNT", (const char *)args[ARG_ACCOUNT]) != AD_OK) {
             say("Invalid ACCOUNT=%s (1..%ld)\n", args[ARG_ACCOUNT], (LONG)CFG_ACCOUNTS);
@@ -347,6 +352,7 @@ static int save_settings(void)
     strcpy(g.client_id, cfg.client_id);
     strcpy(g.tenant, cfg.tenant);
     g.account = cfg.account;
+    g.start = cfg.start;
     if (cfg.account == 1) {
         strcpy(g.local, cfg.local);
         strcpy(g.remote, cfg.remote);
@@ -643,6 +649,10 @@ static int cmd_info(void)
     say("%s %s\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_VERSION);
     say("Account:   %ld of %ld%s%s\n", (LONG)cfg.account, (LONG)CFG_ACCOUNTS,
         (LONG)(cfg.name[0] ? ", " : ""), (LONG)cfg.name);
+    if (cfg.start)
+        say("Start:     with account %ld (START=0: the last one used)\n", (LONG)cfg.start);
+    else
+        say("Start:     with the last account used (START=n: always account n)\n");
     say("Local:     %s\n", (LONG)(cfg.local[0] ? cfg.local : "(not set, use LOCAL=)"));
     say("Remote:    %s\n", (LONG)(cfg.remote[0] ? cfg.remote : "(not set, use REMOTE=)"));
     say("Charset:   %s, check every %ld min, %s\n", (LONG)cfg.charset, cfg.interval,
@@ -921,7 +931,10 @@ static void sync_progress(void *ud, const SyncProgress *p)
         stop_pass = paused = 1;
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
     }
-    if ((r & STATUS_MENU) && (pending = status_menu()) != 0) {
+    if ((r & STATUS_MENU) && (pending = status_menu()) == STATUS_M_START) {
+        pending = 0;                                    /* no need to stop for it */
+        start_toggle_req = 1;
+    } else if ((r & STATUS_MENU) && pending) {
         stop_pass = 1;                                  /* end this pass, then the menu */
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
     }
@@ -1017,7 +1030,12 @@ static int wait_next(long secs)
             r = status_handle();
             if (r & STATUS_QUIT)
                 return AD_ERR_BREAK;
-            if ((r & STATUS_MENU) && (pending = status_menu()) != 0)
+            if ((r & STATUS_MENU) && (pending = status_menu()) == STATUS_M_START) {
+                pending = 0;
+                start_toggle_req = 1;
+                return 2;
+            }
+            if ((r & STATUS_MENU) && pending)
                 return 2;
             if ((r & STATUS_SYNC) && (!signed_in || !cfg.local[0] || !cfg.remote[0])) {
                 pending = STATUS_M_SIGNIN;
@@ -1057,6 +1075,21 @@ static char remote_utf8[CFG_PATH_SIZE * 2], state_dir[CFG_PATH_SIZE + 16], state
 static int ready;                       /* the active account is signed in and set up */
 static int quit_req;                    /* "Quit" while signing in */
 
+/* "Start with this account": set or clear (then: the last account used). */
+static void update_menu(void);
+
+static void toggle_start(void)
+{
+    cfg.start = cfg.start == cfg.account ? 0 : cfg.account;
+    save_settings();
+    print_time();
+    if (cfg.start)
+        note("Start with account %ld\n", (LONG)cfg.start);
+    else
+        note("Start with the last account used\n");
+    update_menu();
+}
+
 /* plat_sleep's hook while signing in: the window and the icon answer, Stop cancels */
 static void ui_idle(void)
 {
@@ -1068,7 +1101,10 @@ static void ui_idle(void)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
     if (a & APPICON_STATUS)
         status_front();
-    if ((r & STATUS_MENU) && (pending = status_menu()) != 0)
+    if ((r & STATUS_MENU) && (pending = status_menu()) == STATUS_M_START) {
+        pending = 0;
+        start_toggle_req = 1;
+    } else if ((r & STATUS_MENU) && pending)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);       /* another choice: stop waiting */
 }
 
@@ -1090,7 +1126,7 @@ static void update_menu(void)
         }
         p[i] = names[i];
     }
-    status_accounts(p, cfg.account, signed_in);
+    status_accounts(p, cfg.account, signed_in, cfg.start);
 }
 
 /* The account's name: the owner of its OneDrive (quiet, for the menu). */
@@ -1375,6 +1411,10 @@ static int cmd_sync(int once)
             rc = AD_ERR_BREAK;
             break;
         }
+        if (start_toggle_req) {
+            start_toggle_req = 0;
+            toggle_start();
+        }
         if (pending) {
             do_pending();
             continue;
@@ -1403,6 +1443,10 @@ static int cmd_sync(int once)
         pass_begins();
         rc = sync_run(&sc, &state, &ss, err, sizeof(err));
         pass_ends(rc, &ss, err, once);
+        if (start_toggle_req) {
+            start_toggle_req = 0;
+            toggle_start();
+        }
         if (ss.downloaded + ss.moved + ss.deleted + ss.folders + ss.kept)
             appicon_refresh();          /* the drawer windows show the new files */
         if (stop_pass && rc != AD_ERR_BREAK) {        /* "Stop" at the very end: just pause */

@@ -1,4 +1,4 @@
-AmiDrive 0.4.0 - klient OneDrive dla AmigaOS 3.x
+AmiDrive 0.4.1 - klient OneDrive dla AmigaOS 3.x
 ================================================
 
 AmiDrive synchronizuje JEDEN wybrany folder z OneDrive z szufladą na dysku
@@ -144,9 +144,11 @@ uruchomieniu sieci.
 Kilka kont OneDrive (do 3)
 --------------------------
 W oknie AmiDrive (aktywnym) prawy przycisk pokazuje menu "Account":
-  1  Jan Kowalski (business)     konta; zaznaczone jest aktywne
-  2  Jan Kowalski (personal)
+  1  Jan Kowalski (business)  (start)   konta; zaznaczone jest aktywne,
+  2  Jan Kowalski (personal)             "(start)" - konto startowe
   3  (empty)
+  Start with this account        aktywne konto zawsze na start (ponownie:
+                                 start z ostatnio używanego)
   Sign in...                     logowanie aktywnego konta (kod w oknie)
   Sign out                       usuwa token aktywnego konta z Amigi
 Synchronizowane jest jedno konto naraz. Wybranie innego konta przełącza
@@ -155,7 +157,9 @@ logowania, a potem pyta o szufladę na Amidze (systemowe okno wyboru) i folder
 w tym OneDrive (musi istnieć). Każde konto ma własną szufladę (dwa konta nie
 mogą używać tej samej), własny folder i własny token. Ikona na pulpicie
 nazywa się "OneDrive", "OneDrive 2" albo "OneDrive 3".
-W Shellu: AmiDrive ACCOUNT=2 (przełącza i zapamiętuje), AmiDrive ACCOUNT=2 LOGIN.
+Bez konta startowego AmiDrive zaczyna od ostatnio używanego.
+W Shellu: AmiDrive ACCOUNT=2 (przełącza i zapamiętuje), AmiDrive ACCOUNT=2 LOGIN,
+AmiDrive START=1 (zawsze start z konta 1; START=0 - z ostatnio używanego).
 Pliki: konto 1 w AmiDrive.prefs i token, konta 2 i 3 w Account2.prefs /
 Account3.prefs i token2 / token3 (ENVARC:AmiDrive).
 

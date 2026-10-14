@@ -101,7 +101,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Arial", 8)
     canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.4.0 – opis działania i instalacji")
+    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.4.1 – opis działania i instalacji")
     canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
     canvas.restoreState()
 
@@ -114,7 +114,7 @@ def content():
                  colWidths=[30 * mm, 140 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     s += [head, Spacer(1, 4),
-          P("Wersja programu 0.4.0, dokument z 14.10.2026.", small), Spacer(1, 6)]
+          P("Wersja programu 0.4.1, dokument z 14.10.2026.", small), Spacer(1, 6)]
 
     # ---------------------------------------------------------------- 1
     s.append(P("1. Czym jest AmiDrive", h1))
@@ -289,7 +289,9 @@ def content():
     s.append(P("Kilka kont OneDrive", h2))
     s.append(P("AmiDrive obsługuje do 3 kont (np. firmowe i prywatne); synchronizowane jest jedno "
                "naraz. W aktywnym oknie AmiDrive prawy przycisk pokazuje menu <b>Account</b>: lista "
-               "kont (zaznaczone aktywne), <i>Sign in...</i> i <i>Sign out</i>. Wybranie pustego konta "
+               "kont (zaznaczone aktywne, „(start)” przy koncie startowym), <i>Start with this account</i> "
+               "(od tego konta AmiDrive zawsze zaczyna; bez tego – od ostatnio używanego), "
+               "<i>Sign in...</i> i <i>Sign out</i>. Wybranie pustego konta "
                "pokazuje kod logowania w oknie, a potem pyta o szufladę na Amidze i folder w tym "
                "OneDrive. Każde konto ma własną szufladę, folder i token (konto 1: "
                "<font name='Consolas'>AmiDrive.prefs</font> i <font name='Consolas'>token</font>, "
@@ -365,6 +367,7 @@ def content():
         ["TEST", "sprawdza zegar, strefę, DNS, TLS i połączenie z Microsoft Graph"],
         ["CLIENTID= / TENANT=", "własna rejestracja aplikacji (rozdział 4)"],
         ["ACCOUNT=1|2|3", "aktywne konto OneDrive (zapamiętywane); w oknie menu Account"],
+        ["START=0|1|2|3", "konto na start (0: ostatnio używane); w menu Start with this account"],
     ], [48 * mm, 122 * mm]))
 
     # ---------------------------------------------------------------- 6
