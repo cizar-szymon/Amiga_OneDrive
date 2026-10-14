@@ -1,4 +1,4 @@
-AmiDrive 0.3.11 - a OneDrive client for AmigaOS 3.x
+AmiDrive 0.3.12 - a OneDrive client for AmigaOS 3.x
 ==================================================
 
 AmiDrive synchronises ONE chosen OneDrive folder with a drawer on the Amiga,
@@ -29,8 +29,10 @@ Installation
      create it in the browser or the OneDrive app),
    - the character set of names, how often to check, both ways or download
      only, the "OneDrive" icon on the Workbench,
-   - the Amiga clock (set it from the Internet / ask / do not check), the
-     time zone (TZ variable with summer time) and autostart.
+   - the Amiga clock (set it from the Internet / ask / do not check),
+     autostart,
+   - always: the time zone (TZ variable with summer time; it shows the clock
+     and the current setting) and whether to set the clock from the net now.
 4. At the end AmiDrive can start at once. On the first start it shows a
    code in a window: open https://login.microsoft.com/device on a phone or
    PC, enter the code, sign in and allow AmiDrive to access your files.

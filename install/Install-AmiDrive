@@ -10,7 +10,7 @@
 ; the settings are saved by AmiDrive itself (ENVARC:AmiDrive/AmiDrive.prefs).
 
 (set #pl (= @language "polski"))
-(set #version "0.3.11")
+(set #version "0.3.12")
 
 (if (< (/ @installer-version 65536) 43)
   (abort "Installer 43 or newer is needed (AmigaOS 3.1.4 / 3.2 / 3.9)."))
@@ -218,29 +218,56 @@
 
 (complete 60)
 
-; ---- time zone -------------------------------------------------------------------
+; ---- time zone and clock (always asked: a wrong zone puts the clock an hour off) ------
 
-(if (= (getenv "TZ") "")
+(set #curtz (getenv "TZ"))
+(run "Date >ENV:AmiDrive-Date" (safe))
+(set #now (getenv "AmiDrive-Date"))
+(run "Delete ENV:AmiDrive-Date QUIET" (safe))
+(set #tzdef
+  (if (= #curtz "CET-1CEST,M3.5.0,M10.5.0/3") 0
+    (if (= #curtz "GMT0BST,M3.5.0/1,M10.5.0") 1
+      (if (= #curtz "EET-2EEST,M3.5.0/3,M10.5.0/4") 2
+        (if (= #curtz "UTC0") 3
+          (if (= #curtz "") (if #pl 0 4) 4))))))
+(set #tz
+  (askchoice
+    (prompt (if #pl
+              (cat "Strefa czasowa (zmienna TZ, z czasem letnim)\n\nZegar Amigi teraz: " #now
+                   "Obecnie: " (if (= #curtz "") "brak TZ - strefa z Locale, bez czasu letniego"
+                                                  (cat "TZ=" #curtz)))
+              (cat "Time zone (TZ variable, with summer time)\n\nAmiga clock now: " #now
+                   "Now: " (if (= #curtz "") "no TZ - zone from Locale, no summer time"
+                                            (cat "TZ=" #curtz)))))
+    (help (if #pl (cat "OneDrive podaje czas w UTC, AmiDrive przelicza go na czas lokalny według TZ. "
+                       "Ustawienia regionalne AmigaOS nie znają czasu letniego, więc bez TZ latem "
+                       "zegar ustawiany z internetu i daty plików różnią się o godzinę.")
+                  (cat "OneDrive gives times in UTC, AmiDrive turns them into local time by TZ. The "
+                       "AmigaOS Locale has no summer time, so without TZ the clock set from the "
+                       "Internet and the file dates are an hour off in summer.")))
+    (choices (if #pl "Europa Środkowa: Polska, Niemcy... (CET/CEST)" "Central Europe: Germany, Poland... (CET/CEST)")
+             (if #pl "Wielka Brytania, Irlandia, Portugalia (GMT/BST)" "UK, Ireland, Portugal (GMT/BST)")
+             (if #pl "Europa Wschodnia: Finlandia, Grecja... (EET/EEST)" "Eastern Europe: Finland, Greece... (EET/EEST)")
+             "UTC"
+             (if #pl "Zostaw obecne ustawienie" "Keep the current setting"))
+    (default #tzdef)))
+(if (< #tz 4)
+  (run (cat "SetEnv SAVE TZ "
+            (select #tz "CET-1CEST,M3.5.0,M10.5.0/3" "GMT0BST,M3.5.0/1,M10.5.0"
+                        "EET-2EEST,M3.5.0/3,M10.5.0/4" "UTC0"))))
+
+(if (askbool
+      (prompt (if #pl "Ustawić zegar Amigi teraz czasem z internetu (w wybranej strefie)?"
+                      "Set the Amiga clock now to the Internet time (in this zone)?"))
+      (help (if #pl "AmiDrive SETCLOCK: czas serwera Microsoftu, ustawia też zegar z baterią. Wymaga sieci."
+                    "AmiDrive SETCLOCK: the Microsoft server's time, also sets the battery clock. Needs the network."))
+      (choices (if #pl "Ustaw" "Set") (if #pl "Nie" "No"))
+      (default 1))
   (
-    (set #tz
-      (askchoice
-        (prompt (if #pl "Strefa czasowa (zmienna TZ, z czasem letnim):" "Time zone (TZ variable, with summer time):"))
-        (help (if #pl (cat "OneDrive podaje czas w UTC. Ustawienia regionalne AmigaOS nie znają czasu letniego, "
-                           "więc bez TZ daty plików latem różnią się o godzinę. Zegar Amigi musi też "
-                           "pokazywać dobrą godzinę (inaczej połączenia szyfrowane się nie udadzą).")
-                      (cat "OneDrive gives times in UTC. The AmigaOS Locale has no summer time, so without TZ "
-                           "file dates are an hour off in summer. The Amiga clock must also be right "
-                           "(else the encrypted connections fail).")))
-        (choices (if #pl "Europa Środkowa (Polska, Niemcy...)" "Central Europe (Germany, Poland...)")
-                 (if #pl "Wielka Brytania, Irlandia, Portugalia" "UK, Ireland, Portugal")
-                 (if #pl "Europa Wschodnia (Finlandia, Grecja...)" "Eastern Europe (Finland, Greece...)")
-                 (if #pl "Nie ustawiaj (strefa z Locale)" "Do not set (zone from Locale)"))
-        (default (if #pl 0 3))))
-    (if (< #tz 3)
-      (run (cat "SetEnv SAVE TZ "
-                (select #tz "CET-1CEST,M3.5.0,M10.5.0/3" "GMT0BST,M3.5.0/1,M10.5.0"
-                            "EET-2EEST,M3.5.0/3,M10.5.0/4"))))
-  ))
+    (working (if #pl "Ustawianie zegara..." "Setting the clock..."))
+    (run (cat "\"" #prog "\" SETCLOCK >ENV:AmiDrive-Clock"))
+    (message (getenv "AmiDrive-Clock"))
+    (run "Delete ENV:AmiDrive-Clock QUIET")))
 
 ; ---- autostart -------------------------------------------------------------------
 

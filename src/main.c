@@ -104,6 +104,7 @@ static int quiet;                       /* from Workbench without WINDOW: progre
 static BPTR logfh;                      /* the log, open during a pass */
 static char log_path[CFG_PATH_SIZE + 32];
 static struct MsgPort *instance;        /* our public port while synchronising */
+static char tzsrc[80];                  /* where the time zone comes from: "TZ=..." or locale */
 static char progname[108];              /* our program file (image of the AppIcon) */
 
 /* ---- output: the Shell or the window, and the log ------------------------------- */
@@ -494,7 +495,11 @@ static int cmd_setclock(void)
     }
     format_local(plat_local_now(), a);
     format_local(tz_to_local(plat_timezone(), utc), n);
-    say("Amiga clock:    %s\nInternet time:  %s (%s)\n", (LONG)a, (LONG)n, (LONG)AD_GRAPH_HOST);
+    say("Amiga clock:    %s\nInternet time:  %s (%s)\nTime zone:      %s\n", (LONG)a, (LONG)n,
+        (LONG)AD_GRAPH_HOST, (LONG)tzsrc);
+    if (strncmp(tzsrc, "TZ=", 3) != 0)
+        say("Warning: no TZ variable: no summer time, the clock may be an hour off. For Poland:\n"
+            "  SetEnv SAVE TZ CET-1CEST,M3.5.0,M10.5.0/3\n");
     if (clock_set_local(tz_to_local(plat_timezone(), utc), &battery) != AD_OK) {
         say("Cannot set the time (timer.device)\n");
         return RETURN_ERROR;
@@ -555,6 +560,8 @@ static int cmd_info(void)
     say("Remote:    %s\n", (LONG)(cfg.remote[0] ? cfg.remote : "(not set, use REMOTE=)"));
     say("Charset:   %s, check every %ld min, %s\n", (LONG)cfg.charset, cfg.interval,
            (LONG)(cfg.upload[0] == 'Y' ? "both ways" : "download only (UPLOAD=NO)"));
+    say("Time zone: %s%s\n", (LONG)tzsrc,
+        (LONG)(strncmp(tzsrc, "TZ=", 3) ? " - set TZ for summer time" : ""));
     say("Clock:     %s\n", (LONG)(cfg.clock[0] == 'N' ? "not checked (CLOCK=NO)" :
                                    cfg.clock[1] == 'U' ? "set automatically from the Internet (CLOCK=AUTO)" :
                                    "window when it is wrong (CLOCK=ASK)"));
@@ -1369,7 +1376,6 @@ int main(int argc, char **argv)
     LONG args[ARG_COUNT];
     struct RDArgs *rda;
     BPTR win = 0, oldout = 0;
-    char tzsrc[80];
     int rc, changed;
 
     memset(args, 0, sizeof(args));

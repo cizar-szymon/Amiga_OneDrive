@@ -1,4 +1,4 @@
-AmiDrive 0.3.11 - klient OneDrive dla AmigaOS 3.x
+AmiDrive 0.3.12 - klient OneDrive dla AmigaOS 3.x
 ================================================
 
 AmiDrive synchronizuje JEDEN wybrany folder z OneDrive z szufladą na dysku
@@ -30,7 +30,9 @@ Instalacja
    - polskie litery w nazwach (Latin-2), co ile minut sprawdzać zmiany,
      w obie strony czy tylko pobieranie, ikona "OneDrive" na pulpicie,
    - zegar Amigi (ustawiać automatycznie z internetu / pytać / nie
-     sprawdzać), strefa czasowa (zmienna TZ z czasem letnim) i autostart.
+     sprawdzać), autostart,
+   - zawsze: strefa czasowa (zmienna TZ z czasem letnim; pokazuje aktualny
+     zegar i obecne ustawienie) i czy ustawić zegar teraz z internetu.
 4. Na koniec AmiDrive może się od razu uruchomić. Przy pierwszym starcie
    pokaże w oknie kod: otwórz na telefonie lub PC
    https://login.microsoft.com/device, wpisz kod, zaloguj się i zgódź na
