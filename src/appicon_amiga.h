@@ -32,6 +32,10 @@ int appicon_handle(void);
  * Returns APPICON_ flags (APPICON_SYNC: ignore, a pass is running). */
 int appicon_poll(void);
 
+/* Close and open again the Workbench windows of LOCAL and the drawers inside it, so
+ * they show the files changed by a synchronisation (Workbench does not notice). */
+void appicon_refresh(void);
+
 void appicon_close(void);
 
 #endif

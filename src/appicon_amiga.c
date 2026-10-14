@@ -163,6 +163,51 @@ static int inside_local(const char *path)
     return path[n] == '\0' || path[n] == '/' || local_full[n - 1] == ':';
 }
 
+/* Workbench does not see files changed by other programs: the open drawers of LOCAL
+ * (and below it) show the old contents. They are closed and opened again (V44). */
+#define MAX_REFRESH 8
+
+void appicon_refresh(void)
+{
+    static struct TagItem show[] = {
+        { WBOPENA_Show, DDFLAGS_SHOWALL },
+        { WBOPENA_ViewBy, DDVM_BYNAME },
+        { TAG_DONE, 0 }
+    };
+    static char names[MAX_REFRESH][PATH_SIZE];
+    struct TagItem get[2];
+    struct List *list = NULL;
+    struct Node *nd;
+    int i, pass, count = 0;
+
+    if (!icon || WorkbenchBase->lib_Version < 44)
+        return;
+    get[0].ti_Tag = WBCTRLA_GetOpenDrawerList;
+    get[0].ti_Data = (ULONG)&list;
+    get[1].ti_Tag = TAG_DONE;
+    if (!WorkbenchControlA(NULL, get) || !list)
+        return;
+    for (nd = list->lh_Head; nd->ln_Succ; nd = nd->ln_Succ)
+        if (count < MAX_REFRESH && nd->ln_Name && strlen(nd->ln_Name) < PATH_SIZE &&
+            inside_local(nd->ln_Name))
+            strcpy(names[count++], nd->ln_Name);
+    get[0].ti_Tag = WBCTRLA_FreeOpenDrawerList;
+    get[0].ti_Data = (ULONG)list;
+    WorkbenchControlA(NULL, get);
+
+    /* LOCAL first (its window under the AmiDrive window), the drawers below it on top */
+    for (pass = 0; pass < 2; pass++)
+        for (i = 0; i < count; i++) {
+            int is_local = strlen(names[i]) == strlen(local_full);
+            if (is_local != (pass == 0))
+                continue;
+            CloseWorkbenchObjectA((STRPTR)names[i], NULL);
+            if (is_local)
+                drawer_icon();
+            OpenWorkbenchObjectA((STRPTR)names[i], is_local && WorkbenchBase->lib_Version >= 45 ? show : NULL);
+        }
+}
+
 /* Copy one dropped object into LOCAL: a file, or a drawer with all it contains. */
 static int copy_in(const struct WBArg *a)
 {
@@ -259,6 +304,8 @@ int appicon_handle(void)
                 for (i = 0; i < am->am_NumArgs; i++)
                     if (copy_in(&am->am_ArgList[i]))
                         r |= APPICON_SYNC;
+                if (r & APPICON_SYNC)
+                    appicon_refresh();      /* show the copied files */
             }
         }
         ReplyMsg((struct Message *)am);

@@ -5,6 +5,11 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.3.11 (14.10.2026)
+-------------------
+- Otwarte okna szuflady OneDrive odświeżają się same po synchronizacji
+  i po skopiowaniu plików upuszczonych na ikonę.
+
 0.3.10 (14.10.2026)
 -------------------
 - Tytuł okna: "OneDrive" z numerem wersji. Pod paskiem jedna linia

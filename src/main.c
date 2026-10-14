@@ -1011,6 +1011,8 @@ static int cmd_sync(int once)
         pass_begins();
         rc = sync_run(&sc, &state, &ss, err, sizeof(err));
         pass_ends(rc, &ss, err, once);
+        if (ss.downloaded + ss.moved + ss.deleted + ss.folders + ss.kept)
+            appicon_refresh();          /* the drawer windows show the new files */
         if (stop_pass && rc != AD_ERR_BREAK) {        /* "Stop" at the very end: just pause */
             stop_pass = 0;
             SetSignal(0, SIGBREAKF_CTRL_C);
