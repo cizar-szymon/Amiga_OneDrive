@@ -63,6 +63,46 @@ void test_config(void)
     CHECK_STR(c.clock, "NO");
     CHECK_INT(config_set(&c, "CLOCK", "ASK"), AD_OK);
 
+    /* accounts: ACCOUNT 1..3, NAME; an account file holds only its own keys */
+    CHECK_INT(c.account, 1);
+    CHECK_INT(config_set(&c, "ACCOUNT", "2"), AD_OK);
+    CHECK_INT(c.account, 2);
+    CHECK_INT(config_set(&c, "ACCOUNT", "4"), AD_ERR_PROTO);
+    CHECK_INT(config_set(&c, "ACCOUNT", "0"), AD_ERR_PROTO);
+    CHECK_INT(config_set(&c, "ACCOUNT", "12"), AD_ERR_PROTO);
+    CHECK_INT(c.account, 2);
+    CHECK_INT(config_set(&c, "NAME", "Jan Kowalski (personal)"), AD_OK);
+    {
+        char t[1024];
+        Config u;
+        CHECK(config_format(&c, t, sizeof(t)) > 0);
+        CHECK(strstr(t, "ACCOUNT=2\n") != NULL);
+        config_defaults(&u);
+        CHECK_INT(config_parse(&u, t), AD_OK);
+        CHECK_INT(u.account, 2);
+        CHECK_STR(u.name, "Jan Kowalski (personal)");
+
+        CHECK_INT(config_set(&c, "LOCAL", "Work:OneDrive2"), AD_OK);
+        CHECK_INT(config_set(&c, "REMOTE", "/Docs"), AD_OK);
+        CHECK(config_format_account(&c, t, sizeof(t)) > 0);
+        CHECK(strstr(t, "LOCAL=Work:OneDrive2\n") != NULL);
+        CHECK(strstr(t, "NAME=Jan Kowalski (personal)\n") != NULL);
+        CHECK(strstr(t, "CHARSET") == NULL);        /* not the global settings */
+        CHECK(strstr(t, "ACCOUNT") == NULL);
+        config_defaults(&u);
+        strcpy(u.charset, "LATIN2");
+        config_account_clear(&u);
+        CHECK_STR(u.local, "");
+        CHECK_INT(config_parse(&u, t), AD_OK);
+        CHECK_STR(u.local, "Work:OneDrive2");
+        CHECK_STR(u.remote, "/Docs");
+        CHECK_STR(u.charset, "LATIN2");             /* kept */
+    }
+    CHECK_INT(config_set(&c, "ACCOUNT", "1"), AD_OK);
+    CHECK_INT(config_set(&c, "NAME", ""), AD_OK);
+    CHECK_INT(config_set(&c, "LOCAL", ""), AD_OK);
+    CHECK_INT(config_set(&c, "REMOTE", ""), AD_OK);
+
     /* kv_get: case, spaces, comments, '=' in the value */
     CHECK_INT(kv_get("# c\n  Key = x \nkey=a=b \r\n", "KEY", v, sizeof(v)), 1);
     CHECK_STR(v, "x");
