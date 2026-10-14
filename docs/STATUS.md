@@ -28,7 +28,7 @@
 | `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
 | `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ A1200: `ONCE` i praca w tle (`INTERVAL=1`, zmiany wykryte w kolejnych cyklach, Ctrl-C w czasie czekania) |
 | Ikona „OneDrive” na pulpicie (AppIcon): dwuklik otwiera katalog, upuszczone pliki kopiowane i wysyłane, menu Narzędzia „synchronise now” / „stop”, `APPICON=YES\|NO` | ✅ A1200: ikona dodawana i zdejmowana; ⏳ dwuklik, upuszczanie, menu (wymaga myszy) |
-| Autostart: ikona projektu `SystemSD:WBStartup/AmiDrive.info` + plik `AmiDrive` (narzędzie domyślne `Work:AmiDrive/AmiDrive`, `DONOTWAIT`) | ✅ A1200: otwarcie ikony uruchamia AmiDrive w tle; ⏳ prawdziwy restart |
+| Autostart: ikona projektu `SystemSD:WBStartup/AmiDrive.info` + plik `AmiDrive` (narzędzie domyślne `Work:AmiDrive/AmiDrive`, `DONOTWAIT`) | ✅ A1200: otwarcie ikony uruchamia AmiDrive w tle; restart (`C:Reboot`, 14.10.2026): AmiDrive wystartował sam, ikona „OneDrive” na pulpicie, przejście „no changes” |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
