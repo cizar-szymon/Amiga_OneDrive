@@ -29,7 +29,14 @@ static struct MsgPort *port;
 static struct AppIcon *icon;
 static struct AppMenuItem *menu_sync, *menu_stop, *menu_status;
 static struct MinList later;            /* files dropped during a pass, not answered yet */
-static struct DiskObject *dob;
+static struct DiskObject *dob;          /* the image shown now */
+static struct DiskObject *idle_dob, *busy_dob;  /* busy: Icons/OneDrive-sync, may be NULL */
+static char icon_label[32];
+static struct TagItem icon_tags[] = {
+    { WBAPPICONA_SupportsOpen, TRUE },          /* double-click: AMCLASSICON_Open (V44) */
+    { WBAPPICONA_PropagatePosition, TRUE },     /* moved by the user: do_CurrentX/Y (V44) */
+    { TAG_DONE, 0 }
+};
 static char local_dir[PATH_SIZE];       /* LOCAL as given (opened by double-click) */
 static char local_full[PATH_SIZE];      /* LOCAL from its lock: to refuse drops from inside */
 static void (*log_msg)(const char *msg);
@@ -41,17 +48,30 @@ static void say(void)
         log_msg(msg);
 }
 
-/* the image: the program's icon, else the default drawer; placed by Workbench */
-static struct DiskObject *load_image(const char *progname)
+/* an icon next to the program (PROGDIR:name.info), NULL if there is none */
+static struct DiskObject *load_progdir(const char *name)
 {
     struct DiskObject *d = NULL;
     BPTR dir = GetProgramDir();
 
-    if (dir && progname && *progname) {
+    if (dir && name && *name) {
         BPTR old = CurrentDir(dir);
-        d = GetDiskObject((STRPTR)FilePart((STRPTR)progname));
+        d = GetDiskObject((STRPTR)name);
         CurrentDir(old);
     }
+    if (d) {
+        d->do_Type = 0;                 /* as AddAppIcon wants it */
+        d->do_CurrentX = NO_ICON_POSITION;
+        d->do_CurrentY = NO_ICON_POSITION;
+    }
+    return d;
+}
+
+/* the image: the program's icon, else the default drawer; placed by Workbench */
+static struct DiskObject *load_image(const char *progname)
+{
+    struct DiskObject *d = progname ? load_progdir(FilePart((STRPTR)progname)) : NULL;
+
     if (!d)
         d = GetDefDiskObject(WBDRAWER);
     if (d) {
@@ -102,13 +122,10 @@ static void drawer_icon(void)
 int appicon_open(const char *label, const char *local, const char *progname,
                  void (*log)(const char *msg))
 {
-    static struct TagItem tags[] = {
-        { WBAPPICONA_SupportsOpen, TRUE },      /* double-click: AMCLASSICON_Open (V44) */
-        { TAG_DONE, 0 }
-    };
     BPTR lock;
 
     log_msg = log;
+    strncpy(icon_label, label, sizeof(icon_label) - 1);
     strncpy(local_dir, local, sizeof(local_dir) - 1);
     local_full[0] = '\0';
     if ((lock = Lock((STRPTR)local, ACCESS_READ)) != 0) {
@@ -117,17 +134,39 @@ int appicon_open(const char *label, const char *local, const char *progname,
     }
     if (!(WorkbenchBase = OpenLibrary((STRPTR)"workbench.library", 37)) ||
         !(IconBase = OpenLibrary((STRPTR)"icon.library", 37)) ||
-        !(port = CreateMsgPort()) || !(dob = load_image(progname)) ||
-        !(icon = AddAppIconA(0, 0, (STRPTR)label, port, 0, dob, tags))) {
+        !(port = CreateMsgPort()) || !(dob = idle_dob = load_image(progname)) ||
+        !(icon = AddAppIconA(0, 0, (STRPTR)label, port, 0, dob, icon_tags))) {
         appicon_close();                /* no Workbench running (or no memory) */
         return 0;
     }
     NewList((struct List *)&later);
+    busy_dob = load_progdir("Icons/OneDrive-sync");
     drawer_icon();
     menu_status = AddAppMenuItemA(MENU_STATUS, 0, (STRPTR)"AmiDrive: status", port, NULL);
     menu_sync = AddAppMenuItemA(MENU_SYNC, 0, (STRPTR)"AmiDrive: synchronise now", port, NULL);
     menu_stop = AddAppMenuItemA(MENU_STOP, 0, (STRPTR)"AmiDrive: quit", port, NULL);
     return 1;
+}
+
+/* Show the "synchronising" image (or the normal one again). Workbench cannot change
+ * the image of an AppIcon in place: it is removed and added again with the other one,
+ * at the place the user moved it to (propagated position). */
+void appicon_busy(int busy)
+{
+    struct DiskObject *want = busy && busy_dob ? busy_dob : idle_dob;
+    struct AppIcon *n;
+
+    if (!icon || want == dob)
+        return;
+    want->do_CurrentX = dob->do_CurrentX;
+    want->do_CurrentY = dob->do_CurrentY;
+    RemoveAppIcon(icon);
+    if ((n = AddAppIconA(0, 0, (STRPTR)icon_label, port, 0, want, icon_tags)) != NULL) {
+        icon = n;
+        dob = want;
+    } else {                            /* no memory: the old image back */
+        icon = AddAppIconA(0, 0, (STRPTR)icon_label, port, 0, dob, icon_tags);
+    }
 }
 
 ULONG appicon_signal(void)
@@ -337,9 +376,11 @@ void appicon_close(void)
         DeleteMsgPort(port);
         port = NULL;
     }
-    if (dob)
-        FreeDiskObject(dob);
-    dob = NULL;
+    if (idle_dob)
+        FreeDiskObject(idle_dob);
+    if (busy_dob)
+        FreeDiskObject(busy_dob);
+    dob = idle_dob = busy_dob = NULL;
     if (IconBase)
         CloseLibrary(IconBase);
     if (WorkbenchBase)

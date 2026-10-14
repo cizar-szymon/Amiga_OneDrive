@@ -5,6 +5,11 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.3.13 (14.10.2026)
+-------------------
+- Ikona "OneDrive" pokazuje, że trwa synchronizacja (pomarańczowe okrągłe
+  strzałki); krótkie sprawdzenia bez zmian jej nie przełączają.
+
 0.3.12 (14.10.2026)
 -------------------
 - Instalator zawsze pyta o strefę czasową (pokazuje zegar Amigi i obecne

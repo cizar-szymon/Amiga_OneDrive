@@ -279,6 +279,31 @@ def art_cloud():
     return finish(img)
 
 
+def art_cloud_sync():
+    """the cloud while synchronising: two orange round arrows (the "refresh" sign)"""
+    import math
+    img = canvas()
+    draw_cloud(img, 2, 8, 1.0)
+    cx, cy, r, w = 23, 22, 7.5, 2.6
+
+    def ring(a0, a1, col_top, col_bottom):
+        """an arc from a0 to a1 degrees with an arrow head at a1"""
+        def pt(a, rr):
+            return (cx + rr * math.cos(math.radians(a)), cy - rr * math.sin(math.radians(a)))
+        steps = 24
+        outer = [pt(a0 + (a1 - a0) * k / steps, r + w / 2) for k in range(steps + 1)]
+        inner = [pt(a1 - (a1 - a0) * k / steps, r - w / 2) for k in range(steps + 1)]
+        tip = pt(a1 - 38, r)                        # the head points along the arc
+        head = [pt(a1, r + w * 1.4), pt(a1, r - w * 1.4), tip]
+        m = mask_of(lambda d: (d.polygon([tuple(s(x, y)) for x, y in outer + inner], fill=255),
+                               d.polygon([tuple(s(x, y)) for x, y in head], fill=255)))
+        fill_shape(img, m, col_top, col_bottom, outline=(110, 50, 0), width=0.8)
+
+    ring(200, 30, (255, 200, 80), (235, 120, 0))     # upper arc, head on the right
+    ring(20, -150, (255, 200, 80), (235, 120, 0))    # lower arc, head on the left
+    return finish(img)
+
+
 def art_installer():
     """the installer, like the Warp one: a drive, the cloud, a green round arrow down"""
     img = canvas()
@@ -340,7 +365,7 @@ def art_doc():
     return finish(img)
 
 
-ARTS = {"cloud": art_cloud, "installer": art_installer, "drawer": art_drawer, "doc": art_doc}
+ARTS = {"cloud": art_cloud, "cloud_sync": art_cloud_sync, "installer": art_installer, "drawer": art_drawer, "doc": art_doc}
 
 
 def save_icon(path, art, types=(), default_tool=None, drawer=False):

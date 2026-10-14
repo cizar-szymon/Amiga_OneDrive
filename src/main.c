@@ -661,7 +661,7 @@ static void print_time(void)
 
 static struct {
     struct DateStamp pass_start, phase_start;
-    int phase, auto_shown;
+    int phase, auto_shown, icon_busy;
     unsigned long xfer;                 /* bytes really transferred in this phase */
     const char *last_file;
     unsigned long last_done;            /* file_done at the last report */
@@ -810,6 +810,12 @@ static void sync_progress(void *ud, const SyncProgress *p)
         pg.last_done = p->file_done;
     }
 
+    /* the "synchronising" icon once something takes time (short checks do not blink) */
+    if (!pg.icon_busy && (p->file || ticks_since(&pg.pass_start) >= 150)) {
+        pg.icon_busy = 1;
+        appicon_busy(1);
+    }
+
     r = appicon_poll();
     if (r & APPICON_STOP)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);       /* the pass ends at the next check */
@@ -871,6 +877,7 @@ static void pass_ends(int rc, const SyncStats *ss, const char *err, int once)
     }
     next_check = once ? 0 : plat_local_now() + (unsigned long)cfg.interval * 60;
     status_busy(0);
+    appicon_busy(0);
     show_idle();
 }
 

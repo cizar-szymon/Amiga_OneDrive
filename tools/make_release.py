@@ -17,6 +17,7 @@ Archive layout:
     Docs/(.info)                     AmiDrive.txt, AmiDrive_en.txt, *_release*.txt (+icons),
                                      AmiDrive-opis.pdf
     WBStartup/AmiDrive(.info)        autostart icon template (default tool set by the installer)
+    Icons/OneDrive-sync.info         the "OneDrive" icon while synchronising
 """
 
 import argparse
@@ -55,11 +56,14 @@ def build(ver):
         shutil.rmtree(top)
     os.makedirs(os.path.join(out, "Docs"))
     os.makedirs(os.path.join(out, "WBStartup"))
+    os.makedirs(os.path.join(out, "Icons"))
 
     make_icon.save_icon(os.path.join(top, name + ".info"), "drawer", drawer=True)
 
     shutil.copy(os.path.join(ROOT, "build", "amiga", "AmiDrive"), os.path.join(out, "AmiDrive"))
     make_icon.save_icon(os.path.join(out, "AmiDrive.info"), "cloud", PROG_TOOLTYPES)
+    # the "OneDrive" icon while synchronising (PROGDIR:Icons/OneDrive-sync.info)
+    make_icon.save_icon(os.path.join(out, "Icons", "OneDrive-sync.info"), "cloud_sync")
 
     amiga_text(os.path.join(ROOT, "install", "Install-AmiDrive"), os.path.join(out, "Install-AmiDrive"))
     make_icon.save_icon(os.path.join(out, "Install-AmiDrive.info"), "installer",

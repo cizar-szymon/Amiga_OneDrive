@@ -1,4 +1,4 @@
-AmiDrive 0.3.12 - klient OneDrive dla AmigaOS 3.x
+AmiDrive 0.3.13 - klient OneDrive dla AmigaOS 3.x
 ================================================
 
 AmiDrive synchronizuje JEDEN wybrany folder z OneDrive z szufladą na dysku
@@ -47,7 +47,8 @@ Na co dzień
 AmiDrive pracuje w tle bez okna i co kilka minut sprawdza zmiany. Okno
 pojawia się tylko przy błędzie albo logowaniu.
 
-Ikona "OneDrive" na pulpicie (gdy AmiDrive działa):
+Ikona "OneDrive" na pulpicie (gdy AmiDrive działa; w trakcie synchronizacji
+ma pomarańczowe okrągłe strzałki zamiast niebieskiej i zielonej):
   dwuklik             otwiera szufladę z plikami (AmigaOS 3.5 lub nowszy;
                       od 3.9/3.2: wszystkie pliki, lista według nazw)
                       i okno AmiDrive z przyciskami - od razu, także

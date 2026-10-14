@@ -6,7 +6,8 @@
  *   Tools menu              "AmiDrive: status", "AmiDrive: synchronise now", "AmiDrive: quit"
  * During a pass appicon_poll() opens the drawer and answers the menu at once; dropped
  * files wait (their messages unanswered) until appicon_handle() after the pass.
- * The image is the icon of the program (PROGDIR:<name>.info), else the default drawer. */
+ * The image is the icon of the program (PROGDIR:<name>.info), else the default drawer;
+ * while synchronising PROGDIR:Icons/OneDrive-sync.info (if it is there). */
 #ifndef APPICON_AMIGA_H
 #define APPICON_AMIGA_H
 
@@ -20,6 +21,9 @@
  * log/window. Returns 1 if shown, 0 without Workbench or memory (AmiDrive goes on). */
 int appicon_open(const char *label, const char *local, const char *progname,
                  void (*log)(const char *msg));
+
+/* 1: the "synchronising" image, 0: the normal one. */
+void appicon_busy(int busy);
 
 /* Signal of the icon's message port (0 if not shown). */
 ULONG appicon_signal(void);

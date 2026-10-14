@@ -10,7 +10,7 @@
 ; the settings are saved by AmiDrive itself (ENVARC:AmiDrive/AmiDrive.prefs).
 
 (set #pl (= @language "polski"))
-(set #version "0.3.12")
+(set #version "0.3.13")
 
 (if (< (/ @installer-version 65536) 43)
   (abort "Installer 43 or newer is needed (AmigaOS 3.1.4 / 3.2 / 3.9)."))
@@ -90,6 +90,14 @@
   (source "AmiDrive")
   (dest #progdir)
   (infos)
+  (optional "force"))
+
+(copyfiles
+  (prompt (if #pl "Kopiowanie ikon." "Copying the icons."))
+  (help @copyfiles-help)
+  (source "Icons")
+  (dest (tackon #progdir "Icons"))
+  (all)
   (optional "force"))
 
 (copyfiles
