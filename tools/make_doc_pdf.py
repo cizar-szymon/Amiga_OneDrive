@@ -101,7 +101,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Arial", 8)
     canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.13 – opis działania i instalacji")
+    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.4.0 – opis działania i instalacji")
     canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
     canvas.restoreState()
 
@@ -114,7 +114,7 @@ def content():
                  colWidths=[30 * mm, 140 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     s += [head, Spacer(1, 4),
-          P("Wersja programu 0.3.13, dokument z 14.10.2026.", small), Spacer(1, 6)]
+          P("Wersja programu 0.4.0, dokument z 14.10.2026.", small), Spacer(1, 6)]
 
     # ---------------------------------------------------------------- 1
     s.append(P("1. Czym jest AmiDrive", h1))
@@ -286,6 +286,15 @@ def content():
         "DONOTWAIT) albo – jak na A1200 – połóż tam ikonę projektu z narzędziem domyślnym "
         "wskazującym program (<font name='Consolas'>tools/make_icon.py --project</font>).",
     ], 6)]
+    s.append(P("Kilka kont OneDrive", h2))
+    s.append(P("AmiDrive obsługuje do 3 kont (np. firmowe i prywatne); synchronizowane jest jedno "
+               "naraz. W aktywnym oknie AmiDrive prawy przycisk pokazuje menu <b>Account</b>: lista "
+               "kont (zaznaczone aktywne), <i>Sign in...</i> i <i>Sign out</i>. Wybranie pustego konta "
+               "pokazuje kod logowania w oknie, a potem pyta o szufladę na Amidze i folder w tym "
+               "OneDrive. Każde konto ma własną szufladę, folder i token (konto 1: "
+               "<font name='Consolas'>AmiDrive.prefs</font> i <font name='Consolas'>token</font>, "
+               "konta 2–3: <font name='Consolas'>Account2.prefs</font>, <font name='Consolas'>token2</font> …). "
+               "W Shellu: <font name='Consolas'>AmiDrive ACCOUNT=2</font>."))
     s.append(P("Konto prywatne a firmowe – rejestracja aplikacji", h2))
     s.append(P("AmiDrive loguje się przez aplikację zarejestrowaną w Microsoft Entra ID (identyfikator "
                "wbudowany w program: <font name='Consolas'>0474e444-3266-446b-b49c-d47a01cadf56</font>, "
@@ -355,6 +364,7 @@ def content():
         ["LOGIN / LOGOUT / INFO", "logowanie, wylogowanie, stan konta i ustawień"],
         ["TEST", "sprawdza zegar, strefę, DNS, TLS i połączenie z Microsoft Graph"],
         ["CLIENTID= / TENANT=", "własna rejestracja aplikacji (rozdział 4)"],
+        ["ACCOUNT=1|2|3", "aktywne konto OneDrive (zapamiętywane); w oknie menu Account"],
     ], [48 * mm, 122 * mm]))
 
     # ---------------------------------------------------------------- 6

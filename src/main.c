@@ -915,7 +915,7 @@ static void sync_progress(void *ud, const SyncProgress *p)
     if (r & APPICON_STOP)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);       /* the pass ends at the next check */
     if (r & APPICON_STATUS)
-        force |= status_open();
+        force |= status_front();
     r = status_handle();                                /* "Sync now": running already */
     if (r & STATUS_STOP) {                              /* end this pass, then pause */
         stop_pass = paused = 1;
@@ -1010,7 +1010,7 @@ static int wait_next(long secs)
                 paused = 0;
                 return AD_OK;
             }
-            if ((r & APPICON_STATUS) && status_open())
+            if ((r & APPICON_STATUS) && status_front())
                 show_idle();
         }
         if ((wsig = status_signal()) != 0 && (SetSignal(0, wsig) & wsig)) {
@@ -1067,7 +1067,7 @@ static void ui_idle(void)
     if ((r & (STATUS_STOP | STATUS_QUIT)) || (a & APPICON_STOP))
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
     if (a & APPICON_STATUS)
-        status_open();
+        status_front();
     if ((r & STATUS_MENU) && (pending = status_menu()) != 0)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);       /* another choice: stop waiting */
 }
@@ -1152,6 +1152,7 @@ static int login_ui(void)
     }
     drive_name();
     save_settings();
+    status_show("Signed in", cfg.name, -1);
     print_time();
     note("Account %ld signed in: %s\n", (LONG)cfg.account, (LONG)cfg.name);
     return 1;
@@ -1194,6 +1195,7 @@ static int setup_folders(void)
     char err[200];
     int rc;
 
+    status_show("Choose the folders", "for the files of this account", -1);
     while (!cfg.local[0]) {
         sprintf(t, "OneDrive %ld: drawer for its files", (LONG)cfg.account);
         dir[0] = '\0';
@@ -1293,8 +1295,8 @@ static void do_pending(void)
         print_time();
         note("Account %ld signed out (%s deleted)\n", (LONG)cfg.account, (LONG)token_file);
     } else if (p == STATUS_M_SIGNIN) {
-        if (login_ui())
-            signed_in = 1;
+        if ((!signed_in || (cfg.local[0] && cfg.remote[0])) && login_ui())
+            signed_in = 1;              /* signed in without folders: only the folders */
         if (signed_in && (!cfg.local[0] || !cfg.remote[0]))
             setup_folders();
     } else if (p >= 1 && p <= CFG_ACCOUNTS && p != cfg.account) {

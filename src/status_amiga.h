@@ -27,6 +27,7 @@ int status_layout(int *left, int *top, int *width, int *height);
 
 /* Open the window (or bring it to the front). Returns 1 if it is open. */
 int status_open(void);
+int status_front(void);                 /* open, and in front of the other windows */
 int status_is_open(void);
 void status_close(void);
 

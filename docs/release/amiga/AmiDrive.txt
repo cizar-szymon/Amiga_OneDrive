@@ -1,4 +1,4 @@
-AmiDrive 0.3.13 - klient OneDrive dla AmigaOS 3.x
+AmiDrive 0.4.0 - klient OneDrive dla AmigaOS 3.x
 ================================================
 
 AmiDrive synchronizuje JEDEN wybrany folder z OneDrive z szufladą na dysku
@@ -139,6 +139,25 @@ certyfikatem; pomijane są tylko jego daty) i:
 Ustawiany jest zegar systemu i zegar z baterią (jak SetClock SAVE). Amiga bez
 zegara z baterią: CLOCK=AUTO albo "AmiDrive SETCLOCK" w S:User-Startup po
 uruchomieniu sieci.
+
+
+Kilka kont OneDrive (do 3)
+--------------------------
+W oknie AmiDrive (aktywnym) prawy przycisk pokazuje menu "Account":
+  1  Jan Kowalski (business)     konta; zaznaczone jest aktywne
+  2  Jan Kowalski (personal)
+  3  (empty)
+  Sign in...                     logowanie aktywnego konta (kod w oknie)
+  Sign out                       usuwa token aktywnego konta z Amigi
+Synchronizowane jest jedno konto naraz. Wybranie innego konta przełącza
+AmiDrive na nie; przy pierwszym wyborze pustego konta AmiDrive pokazuje kod
+logowania, a potem pyta o szufladę na Amidze (systemowe okno wyboru) i folder
+w tym OneDrive (musi istnieć). Każde konto ma własną szufladę (dwa konta nie
+mogą używać tej samej), własny folder i własny token. Ikona na pulpicie
+nazywa się "OneDrive", "OneDrive 2" albo "OneDrive 3".
+W Shellu: AmiDrive ACCOUNT=2 (przełącza i zapamiętuje), AmiDrive ACCOUNT=2 LOGIN.
+Pliki: konto 1 w AmiDrive.prefs i token, konta 2 i 3 w Account2.prefs /
+Account3.prefs i token2 / token3 (ENVARC:AmiDrive).
 
 
 Konto firmowe innej organizacji

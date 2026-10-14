@@ -260,10 +260,8 @@ int status_open(void)
     struct Screen *scr;
     int fh, top;
 
-    if (win) {
-        WindowToFront(win);
+    if (win)                            /* not to the front: dialogs may be over it */
         return 1;
-    }
     if ((!IntuitionBase && !(IntuitionBase = (struct IntuitionBase *)OpenLibrary((STRPTR)"intuition.library", 37))) ||
         (!GfxBase && !(GfxBase = (struct GfxBase *)OpenLibrary((STRPTR)"graphics.library", 37))) ||
         (!GadToolsBase && !(GadToolsBase = OpenLibrary((STRPTR)"gadtools.library", 37))))
@@ -303,6 +301,14 @@ int status_open(void)
     if (!win)
         status_close();
     return win != NULL;
+}
+
+int status_front(void)
+{
+    if (!status_open())
+        return 0;
+    WindowToFront(win);
+    return 1;
 }
 
 int status_is_open(void)

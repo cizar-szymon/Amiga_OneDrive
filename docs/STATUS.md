@@ -37,6 +37,7 @@
 | Szuflada z plikami (0.3.5): `OpenWorkbenchObject` z `WBOPENA_Show=DDFLAGS_SHOWALL`, `WBOPENA_ViewBy=DDVM_BYNAME` (V45); ikona szuflady tworzona, gdy jej brak (te same tryby); 0.3.6: okno AmiDrive w lewym górnym rogu (obok kolumny ikon dysków), szuflada pod nim tej samej szerokości (`status_layout`), przyciski węższe, blisko siebie; 0.3.7: okno tak szerokie jak przyciski (238 px wnętrza), krótsze napisy, rysowanie bez czyszczenia (JAM2, bez migania); 0.3.8: położenie okna szuflady ustawiane w jej ikonie przed każdym otwarciem (także istniejącej, np. z instalatora – u użytkownika okno było obok), „Last check … / Next at …”; 0.3.9: przyciski Sync now / Stop (pauza: przerywa przejście, brak sprawdzania do Sync now) / Quit (koniec), gadżet zamykania chowa okno, menu „AmiDrive: quit”, wynik tylko z niezerowymi licznikami; 0.3.10: tytuł „OneDrive <wersja>”, jedna linia pod paskiem, okno niższe; 0.3.11: po przejściu ze zmianami lokalnymi (i po kopiowaniu upuszczonych plików) otwarte okna szuflady LOCAL i podszuflad są zamykane i otwierane na nowo (`WBCTRLA_GetOpenDrawerList`, `CloseWorkbenchObject`) – Workbench nie widzi zmian innych programów | ✅ A1200 |
 | Strefa czasowa (0.3.12; zgłoszenie: na drugiej Amidze zegar ustawiany z internetu o godzinę za mało – brak TZ, Locale bez czasu letniego): instalator zawsze pyta o strefę (zegar i obecne TZ na ekranie, `(safe)` także w symulacji) i proponuje `SETCLOCK`; `INFO` / `SETCLOCK` pokazują strefę i ostrzegają bez TZ | ✅ A1200 (instalator w symulacji) |
 | Ikona „OneDrive” w trakcie synchronizacji (0.3.13): obrazek `Icons/OneDrive-sync.info` (pomarańczowe okrągłe strzałki), AppIcon usuwana i dodawana z drugim obrazkiem (`WBAPPICONA_PropagatePosition` – miejsce zostaje); przełącza po 3 s przejścia albo przy pierwszym pliku | ✅ A1200 |
+| Konta (0.4.0): do 3 kont, jedno aktywne; menu „Account” w oknie (GadTools, lista z zaznaczeniem, Sign in…, Sign out), logowanie z kodem w oknie (`plat_idle_hook`, Stop anuluje), nowe konto: wybór szuflady (ASL) i folderu (okienko tekstowe, sprawdzenie w Graph), `ACCOUNT=`, `Account<n>.prefs`, `token<n>` | ✅ A1200: konto 2 (prywatne) zalogowane i ustawione z menu, synchronizacja, przełączanie 1↔2; ⏳ Sign out |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
@@ -127,6 +128,14 @@
   w oknie. Dwuklik w czasie czekania → szuflada + okno; „Synchronise now” → przejście
   (przycisk wyszarzony w trakcie), potem „Up to date”; „Stop AmiDrive” → program zakończony,
   ikona zniknęła.
+- A1200, konta (14.10.2026, 0.4.0): menu „Account” → konto 2: kod w oknie, zalogowane konto
+  prywatne („Szymon Paprocki (personal)”), szuflada `Work:onedrive2` (ASL), folder
+  `/retro/amigadrive` – najpierw nie istniał (komunikat „There is no folder…”), po założeniu
+  przyjęty; pierwsza synchronizacja, ikona „OneDrive 2”, szuflada pod oknem; powrót na konto 1
+  bez pytań. Znalezione i poprawione: okienka chowały się za oknem AmiDrive (`status_open` nie
+  wysuwa już okna na wierzch), po zalogowaniu okno nadal pokazywało kod, „Sign in…” przy
+  zalogowanym koncie bez folderów logowało od nowa. Pierwsza próba: Microsoft nie potwierdził
+  kodu (prawdopodobnie wpisany w innym miejscu) – Stop anulował poprawnie.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,

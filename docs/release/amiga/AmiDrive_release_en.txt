@@ -5,6 +5,15 @@ Reporting bugs: give the version (in a Shell: Version AmiDrive) and attach
 the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
 
 
+0.4.0 (14.10.2026)
+------------------
+- Up to 3 OneDrive accounts (e.g. work and personal), one active: menu
+  "Account" in the AmiDrive window (the accounts, Sign in..., Sign out).
+  Sign-in with the code in the window, then a drawer and a folder for a new
+  account.
+- An expired sign-in no longer ends the program: the window waits for
+  "Sign in".
+
 0.3.13 (14.10.2026)
 -------------------
 - The "OneDrive" icon shows that a synchronisation is running (orange round

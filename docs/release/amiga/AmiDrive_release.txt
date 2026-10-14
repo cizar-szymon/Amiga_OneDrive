@@ -5,6 +5,13 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.4.0 (14.10.2026)
+------------------
+- Do 3 kont OneDrive (np. firmowe i prywatne), jedno aktywne: menu
+  "Account" w oknie AmiDrive (lista kont, Sign in..., Sign out). Logowanie
+  z kodem w oknie, potem wybór szuflady i folderu dla nowego konta.
+- Wygasłe logowanie nie kończy już programu: okno czeka na "Sign in".
+
 0.3.13 (14.10.2026)
 -------------------
 - Ikona "OneDrive" pokazuje, że trwa synchronizacja (pomarańczowe okrągłe
