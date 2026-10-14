@@ -24,7 +24,7 @@
 | Start z ikony (Tool Types, `WINDOW`, dziennik `.AmiDrive/AmiDrive.log`) | ⏳ |
 | `state.c`: baza stanu po `id` (ścieżki z łańcucha rodziców), plik tekstowy zapisywany strumieniowo do `.new` i podmieniany, linia końcowa | ✅ testy + A1200 (`AmiDrive TEST` zapisuje i czyta stan w `T:`) |
 | `plat`: strumieniowe pliki (`plat_open_read/write`, `plat_close` z podmianą) | ✅ A1200 |
-| `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki, usuwanie, zmiana nazwy, podfolder); ⏳ przeniesienie, długie nazwy, zagnieżdżenie |
+| `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki, usuwanie, zmiana nazwy, podfolder, 3 poziomy folderów, przeniesienia plików i folderów, zmiana nazwy folderu, nazwa > 30 znaków, przeniesienie poza folder) |
 | `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
 | `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ `ONCE` na A1200; ⏳ praca w tle |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
@@ -45,8 +45,14 @@
   Po `CHARSET=LATIN2` jedno pełne przejście zmieniło nazwę na `Bryła1.3mf` bez pobierania.
   Dalej (14.10.2026): usunięcie 5 plików w chmurze → usunięte lokalnie; 2 nowe pliki pobrane;
   zmiana nazwy pliku → zmiana nazwy lokalnie bez pobierania; nowy podfolder utworzony; kopia
-  pliku („Kopiuj do”) = nowy element, pobrany. Nie sprawdzone jeszcze: przeniesienie wewnątrz
-  folderu, nazwa > 30 znaków, folder w folderze, przeniesienie poza folder.
+  pliku („Kopiuj do”) = nowy element, pobrany.
+  Dalej (14.10.2026, zmiany w chmurze drugą kopią `LOCAL=RAM:Check` i w przeglądarce):
+  3 poziomy folderów z plikami → utworzone i pobrane po kolei; pliki przeniesione między
+  poziomami → przeniesione lokalnie bez pobierania; zmiana nazwy folderu `Poziom1` → `PoziomA`
+  i przeniesienie folderu `Poziom2` (z `Poziom3` i plikiem) wyżej → jedno przeniesienie folderu,
+  zawartość idzie z nim; nazwa 55 znaków → `To jest bardzo dlug~824513.txt` (30 znaków na `Work:`),
+  usunięcie tego pliku na Amidze usunęło właściwy element w chmurze; plik przeniesiony poza
+  synchronizowany folder → OneDrive zgłasza go jako usunięty, usunięty lokalnie, bez błędu.
 - A1200, etap 2 (14.10.2026): pliki dodane na Amidze (`Copy_of_WhichAmiga` 20 KB + `.info`)
   wysłane do `Retro/AmigaDrive`; następne przejście „no changes” (własne wysyłki wracają
   w delcie z tym samym cTag).
@@ -183,9 +189,9 @@
 - Wysyłanie nie jest wznawiane po przerwaniu (plik wysyłany od nowa w następnym przejściu).
 - `UPLOAD=NO`: plik usunięty na Amidze nie jest pobierany ponownie, dopóki nie zmieni się
   w chmurze.
-- Element, którego folder nadrzędny nie należy do synchronizowanego folderu (np. przeniesiony
-  na zewnątrz, jeśli OneDrive nie zgłosi go jako usuniętego), liczony jako błąd – deltaLink stoi.
-  Do sprawdzenia z prawdziwym kontem.
+- Element, którego folder nadrzędny nie należy do synchronizowanego folderu, liczony jako błąd –
+  deltaLink stoi. OneDrive for Business przy przeniesieniu na zewnątrz zgłasza element jako
+  usunięty (sprawdzone 14.10.2026), więc ten przypadek nie wystąpił.
 - Pobieranie nie wznawia przerwanych plików (nagłówek `Range`) – plik pobierany od nowa.
 
 - Nazwy w Unicode NFD (np. z macOS: litera + znak łączący) dają `_` zamiast litery z ogonkiem –
