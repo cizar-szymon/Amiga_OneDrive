@@ -61,6 +61,39 @@ static struct DiskObject *load_image(const char *progname)
     return d;
 }
 
+/* The drawer with the files gets an icon if it has none: Workbench keeps the window
+ * size and the view in it. A bigger window, all files, by name. An icon that is there
+ * (the user's window) is left alone; a volume root ("Work:") has none. */
+static void drawer_icon(void)
+{
+    struct DiskObject *d;
+    size_t n = strlen(local_dir);
+    BPTR lock;
+
+    if (!n || local_dir[n - 1] == ':' || local_dir[n - 1] == '/')
+        return;
+    if ((d = GetDiskObject((STRPTR)local_dir)) != NULL) {
+        FreeDiskObject(d);
+        return;
+    }
+    if ((lock = Lock((STRPTR)local_dir, ACCESS_READ)) == 0)
+        return;                         /* not there (yet) */
+    UnLock(lock);
+    if (!(d = GetDefDiskObject(WBDRAWER)))
+        return;
+    if (d->do_DrawerData) {
+        d->do_DrawerData->dd_NewWindow.LeftEdge = 60;
+        d->do_DrawerData->dd_NewWindow.TopEdge = 40;
+        d->do_DrawerData->dd_NewWindow.Width = 520;
+        d->do_DrawerData->dd_NewWindow.Height = 300;
+        d->do_DrawerData->dd_Flags = DDFLAGS_SHOWALL;
+        d->do_DrawerData->dd_ViewModes = DDVM_BYNAME;
+    }
+    d->do_CurrentX = d->do_CurrentY = NO_ICON_POSITION;
+    PutDiskObject((STRPTR)local_dir, d);
+    FreeDiskObject(d);
+}
+
 int appicon_open(const char *label, const char *local, const char *progname,
                  void (*log)(const char *msg))
 {
@@ -85,6 +118,7 @@ int appicon_open(const char *label, const char *local, const char *progname,
         return 0;
     }
     NewList((struct List *)&later);
+    drawer_icon();
     menu_status = AddAppMenuItemA(MENU_STATUS, 0, (STRPTR)"AmiDrive: status", port, NULL);
     menu_sync = AddAppMenuItemA(MENU_SYNC, 0, (STRPTR)"AmiDrive: synchronise now", port, NULL);
     menu_stop = AddAppMenuItemA(MENU_STOP, 0, (STRPTR)"AmiDrive: stop", port, NULL);
@@ -96,10 +130,17 @@ ULONG appicon_signal(void)
     return icon ? 1UL << port->mp_SigBit : 0;
 }
 
+/* the drawer as text, all files, sorted by name (tags of V45; V44 opens it as it was) */
 static void open_drawer(void)
 {
+    static struct TagItem tags[] = {
+        { WBOPENA_Show, DDFLAGS_SHOWALL },
+        { WBOPENA_ViewBy, DDVM_BYNAME },
+        { TAG_DONE, 0 }
+    };
+
     if (WorkbenchBase->lib_Version >= 44)
-        OpenWorkbenchObjectA((STRPTR)local_dir, NULL);
+        OpenWorkbenchObjectA((STRPTR)local_dir, WorkbenchBase->lib_Version >= 45 ? tags : NULL);
 }
 
 /* 1 if path is LOCAL or inside it (both full names from locks) */

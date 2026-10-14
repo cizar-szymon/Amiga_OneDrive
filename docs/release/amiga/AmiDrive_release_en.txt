@@ -5,6 +5,12 @@ Reporting bugs: give the version (in a Shell: Version AmiDrive) and attach
 the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
 
 
+0.3.5 (14.10.2026)
+------------------
+- The drawer with the files opens listing all files by name in a bigger
+  window (a drawer icon is made if there is none).
+- Smaller buttons; the AmiDrive window at the right edge of the screen.
+
 0.3.4 (14.10.2026)
 ------------------
 - Faster downloads: the ciphers fastest on a 68k (ChaCha20, AES-128 instead

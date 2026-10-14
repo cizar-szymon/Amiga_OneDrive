@@ -17,7 +17,7 @@
 
 #define WIN_WIDTH 360                   /* inner width */
 #define MARGIN    8
-#define BUTTON_W  100
+#define BUTTON_W  84
 
 enum { GID_SYNC = 1, GID_STOP, GID_HIDE };
 
@@ -109,7 +109,7 @@ static struct Gadget *make_buttons(struct Screen *scr, int top, int fh)
     ng.ng_VisualInfo = vi;
     ng.ng_TopEdge = (WORD)top;
     ng.ng_Width = BUTTON_W;
-    ng.ng_Height = (WORD)(fh + 6);
+    ng.ng_Height = (WORD)(fh + 4);
     ng.ng_Flags = PLACETEXT_IN;
     for (i = 0; i < 3 && g; i++) {
         ng.ng_LeftEdge = (WORD)(scr->WBorLeft + MARGIN + i * (BUTTON_W + gap));
@@ -147,10 +147,11 @@ int status_open(void)
     }
     win = OpenWindowTags(NULL,
                          WA_PubScreen, (ULONG)scr,
-                         WA_Left, (ULONG)((scr->Width - WIN_WIDTH) / 2),
+                         /* at the right edge: the drawer with the files opens on the left */
+                         WA_Left, (ULONG)(scr->Width > WIN_WIDTH + 60 ? scr->Width - WIN_WIDTH - 40 : 0),
                          WA_Top, (ULONG)(scr->BarHeight + 30),
                          WA_InnerWidth, WIN_WIDTH,
-                         WA_InnerHeight, (ULONG)(text_bottom - top + fh + 16),
+                         WA_InnerHeight, (ULONG)(text_bottom - top + fh + 12),
                          WA_Title, (ULONG)AMIDRIVE_NAME " - OneDrive",
                          WA_Gadgets, (ULONG)glist,
                          WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE,

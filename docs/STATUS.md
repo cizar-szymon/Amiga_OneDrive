@@ -34,6 +34,7 @@
 | Okno postępu (0.3.2): `SyncProgress` w `sync.c` (faza, plik, bajty, całość przy pełnej liście i wysyłaniu), okno z paskiem, prędkością i czasem do końca, stan między przejściami; ikona i menu obsługiwane w trakcie przejścia | ✅ testy + A1200 |
 | Przyciski w oknie AmiDrive (0.3.3): „Synchronise now” (wyszarzony w trakcie), „Stop AmiDrive”, „Hide” (GadTools); dwuklik na OneDrive zawsze otwiera szufladę i okno | ✅ A1200 |
 | Szybkość TLS (0.3.4): szyfry ChaCha20 / AES-128 zamiast AES-256, `TEST URL=` (http bez TLS / https, ten sam klient), mniejsze okno („Sync now / Stop / Hide”) | ✅ A1200 |
+| Szuflada z plikami (0.3.5): `OpenWorkbenchObject` z `WBOPENA_Show=DDFLAGS_SHOWALL`, `WBOPENA_ViewBy=DDVM_BYNAME` (V45); ikona szuflady tworzona, gdy jej brak (okno 520×300, te same tryby); mniejsze przyciski, okno AmiDrive przy prawej krawędzi | ✅ A1200 |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów

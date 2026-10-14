@@ -7,7 +7,7 @@
 #define AMIDRIVE_H
 
 #define AMIDRIVE_NAME     "AmiDrive"
-#define AMIDRIVE_VERSION  "0.3.4"
+#define AMIDRIVE_VERSION  "0.3.5"
 #define AMIDRIVE_VER_NUM  0
 #define AMIDRIVE_REV_NUM  3
 #define AMIDRIVE_DATE     "14.10.2026"

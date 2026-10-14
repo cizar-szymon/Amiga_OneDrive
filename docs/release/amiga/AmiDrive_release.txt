@@ -5,6 +5,12 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.3.5 (14.10.2026)
+------------------
+- Szuflada z plikami otwiera się jako lista wszystkich plików według nazw,
+  w większym oknie (ikona szuflady tworzona, jeśli jej nie ma).
+- Mniejsze przyciski; okno AmiDrive przy prawej krawędzi ekranu.
+
 0.3.4 (14.10.2026)
 ------------------
 - Szybsze pobieranie: szyfry najszybsze na 68k (ChaCha20, AES-128 zamiast
