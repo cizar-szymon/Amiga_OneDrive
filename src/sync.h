@@ -30,6 +30,22 @@
 #define SYNC_DELETE_GUARD 10              /* more items missing here than this, and more than
                                              half of all: nothing is deleted on OneDrive */
 
+/* Progress of a pass, for a status window. */
+enum { SYNC_CLOUD = 1,           /* changes from OneDrive (downloads) */
+       SYNC_SCAN,                /* looking through the Amiga directory */
+       SYNC_SEND };              /* sending the changes made on the Amiga */
+
+typedef struct {
+    int phase;                   /* SYNC_CLOUD, SYNC_SCAN, SYNC_SEND */
+    const char *file;            /* the file being transferred (local path), else NULL */
+    unsigned long file_done, file_size;
+    long items;                  /* OneDrive items read in this pass */
+    long files;                  /* files downloaded and sent in this pass */
+    unsigned long done;          /* bytes of the phase handled (transferred or found equal) */
+    unsigned long total;         /* bytes of the whole phase, 0 = unknown: known for the
+                                    first (whole folder) listing and for sending */
+} SyncProgress;
+
 typedef struct {
     Session *graph;              /* graph.microsoft.com */
     Session *dl;                 /* download servers (redirects) */
@@ -46,6 +62,8 @@ typedef struct {
     const char *(*token)(void *ud, int force, int *rc, char *err, int errsize);
     /* One line for the user / the log file (Amiga code page, no '\n'). */
     void (*log)(void *ud, const char *msg);
+    /* NULL or called often (each piece of data, each item): show the progress. */
+    void (*progress)(void *ud, const SyncProgress *p);
     void *ud;
 } SyncConfig;
 

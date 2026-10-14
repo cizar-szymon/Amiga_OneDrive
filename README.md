@@ -28,7 +28,7 @@ Technika: C (vbcc), `bsdsocket.library` (Roadshow), AmiSSL 5 (OpenSSL 3), własn
 z keep-alive, parser JSON jsmn, Microsoft Graph API (`/delta`, pobieranie, wysyłanie w sesjach).
 Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawem testów.
 
-**Stan (wersja 0.3.1):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
+**Stan (wersja 0.3.2):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
 (OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
 start z ikony, autostart z `WBStartup`, ikona „OneDrive” na pulpicie Workbencha.
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
@@ -81,7 +81,8 @@ zapisywane. AmiDrive pracuje w tle bez okna; okno pojawia się tylko przy błęd
 Ponowne kliknięcie ikony pyta, czy zatrzymać.
 
 **Ikona „OneDrive” na pulpicie (AppIcon):** dopóki AmiDrive pracuje w tle, na pulpicie
-Workbencha jest ikona „OneDrive”. Dwuklik otwiera synchronizowany katalog (OS 3.5+), pliki
+Workbencha jest ikona „OneDrive”. Dwuklik otwiera synchronizowany katalog (OS 3.5+, także
+w trakcie synchronizacji – wtedy pokazuje też okno postępu z procentami i czasem do końca), pliki
 i szuflady upuszczone na ikonę są kopiowane do niego (`C:Copy ALL CLONE`) i od razu wysyłane,
 a menu *Narzędzia* ma pozycje „AmiDrive: synchronise now” i „AmiDrive: stop”.
 
@@ -132,6 +133,7 @@ python tools/amiga_remote.py run "Work:AmiDrive/AmiDriveTests"
 |---|---|
 | `src/main.c` | argumenty (`ReadArgs`, Tool Types), polecenia, pętla synchronizacji, dziennik |
 | `src/clock_amiga.c` | czas z serwera (HTTPS, certyfikat bez dat), ustawienie zegara i zegara z baterią |
+| `src/status_amiga.c` | okno postępu (pasek, procenty, prędkość, czas do końca) i stanu między przejściami |
 | `src/appicon_amiga.c` | ikona „OneDrive” na pulpicie (AppIcon), upuszczanie plików, menu Narzędzia |
 | `src/net_amiga.c` | gniazda Roadshow + AmiSSL, weryfikacja certyfikatu |
 | `src/plat_amiga.c` | czas, strefa z `TZ` / Locale, czekanie z Ctrl-C, bezpieczny zapis plików |

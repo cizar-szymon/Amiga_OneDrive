@@ -101,7 +101,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Arial", 8)
     canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.1 – opis działania i instalacji")
+    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.2 – opis działania i instalacji")
     canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
     canvas.restoreState()
 
@@ -114,7 +114,7 @@ def content():
                  colWidths=[30 * mm, 140 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     s += [head, Spacer(1, 4),
-          P("Wersja programu 0.3.1, dokument z 14.10.2026.", small), Spacer(1, 6)]
+          P("Wersja programu 0.3.2, dokument z 14.10.2026.", small), Spacer(1, 6)]
 
     # ---------------------------------------------------------------- 1
     s.append(P("1. Czym jest AmiDrive", h1))
@@ -213,10 +213,12 @@ def content():
                "(chmurka):"))
     s += bullets([
         "<b>dwuklik</b> otwiera synchronizowany katalog <font name='Consolas'>Work:OneDrive</font> "
-        "(AmigaOS 3.5 lub nowszy);",
+        "(AmigaOS 3.5 lub nowszy) – od razu, także w trakcie synchronizacji; wtedy pokazuje się "
+        "też <b>okno postępu</b>: pasek z procentami, bieżący plik, prędkość i szacowany czas do końca;",
         "<b>pliki i szuflady upuszczone na ikonę</b> są kopiowane do tego katalogu i od razu "
         "wysyłane do chmury;",
-        "menu <i>Narzędzia</i>: <b>AmiDrive: synchronise now</b> (przejście teraz) i "
+        "menu <i>Narzędzia</i>: <b>AmiDrive: status</b> (okno postępu albo wynik ostatniego "
+        "sprawdzenia i godzina następnego), <b>AmiDrive: synchronise now</b> (przejście teraz) i "
         "<b>AmiDrive: stop</b> (koniec pracy w tle, ikona znika).",
     ])
     s.append(P("Workbench sam wybiera miejsce ikony (pierwsze wolne w kolumnie ikon – może być "

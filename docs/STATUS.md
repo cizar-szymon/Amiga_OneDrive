@@ -31,6 +31,7 @@
 | Autostart: ikona projektu `SystemSD:WBStartup/AmiDrive.info` + plik `AmiDrive` (narzędzie domyślne `Work:AmiDrive/AmiDrive`, `DONOTWAIT`) | ✅ A1200: otwarcie ikony uruchamia AmiDrive w tle; restart (`C:Reboot`, 14.10.2026): AmiDrive wystartował sam, ikona „OneDrive” na pulpicie, przejście „no changes” |
 | Instalator (`install/Install-AmiDrive`, Installer 47) i paczka `releases/amiga/AmiDrive-0.3.0.lha` (`tools/make_release.py --lha`) | ✅ A1200: aktualizacja na prawdziwo (EN), nowa instalacja w trybie symulacji (PL) |
 | Zegar Amigi: czas z nagłówka `Date` serwera Graph (TLS z weryfikacją łańcucha i nazwy, bez dat), okno „Set clock / Always set automatically / Cancel”, `CLOCK=ASK\|AUTO\|NO`, `SETCLOCK`, pytanie w instalatorze (0.3.1) | ✅ testy + A1200 |
+| Okno postępu (0.3.2): `SyncProgress` w `sync.c` (faza, plik, bajty, całość przy pełnej liście i wysyłaniu), okno z paskiem, prędkością i czasem do końca, stan między przejściami; ikona i menu obsługiwane w trakcie przejścia | ✅ testy + A1200 |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
@@ -109,6 +110,12 @@
     o zegarze) → okno „1460 days ahead” → „Always set automatically” → zegar dobry,
     `CLOCK=AUTO` w prefs, ponowione przejście bez błędu;
   - CLOCK=AUTO, zegar +1 h: ustawiony bez okna, wpis w dzienniku.
+- A1200, okno postępu (14.10.2026, 0.3.2; zgłoszenie: dwuklik na „OneDrive” w trakcie długiej
+  synchronizacji nie otwierał szuflady aż do końca – wyglądało na zawieszenie): kopia
+  testowa `LOCAL=RAM:Big` z pustym stanem (8,9 MB): dwuklik w trakcie → szuflada od razu
+  + okno „Getting the changes from OneDrive: 5 %”, plik 672 KB z 3,5 MB, 695 KB z 8,9 MB,
+  41 KB/s, „about 3 min left”; po końcu okno samo przeszło w „Up to date”, wynik i godzina
+  następnego sprawdzenia.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
@@ -244,6 +251,13 @@
   daty; AUTO ustawia przy starcie i co 24 h (różnica ≥ 2 s); ustawiany jest zegar systemu
   (`TR_SETSYSTIME`) i zegar z baterią (`WriteBattClock`). „Always set automatically” zapisuje
   w prefs tylko `CLOCK=AUTO` (nie Tool Types ani argumenty tego uruchomienia).
+- **Okno postępu (14.10.2026, użytkownik):** całość znana przy pełnej liście (rozmiar folderu
+  z Graph = suma plików; pliki zastane lokalnie liczą się od razu) i przy wysyłaniu (suma
+  plików do wysłania); przy zmianach przyrostowych pasek pokazuje bieżący plik. Prędkość
+  z bajtów rzeczywiście przesłanych w fazie, czas do końca po 5 s. Okno odświeżane najwyżej
+  2 razy na sekundę, z wywołania postępu (każdy kawałek danych, każdy element) – tam też
+  obsługa ikony: dwuklik i menu od razu, upuszczone pliki (komunikaty bez odpowiedzi)
+  dopiero po przejściu. Samo otwiera się raz przy pełnej liście dłuższej niż 10 s.
 - **Dziennik:** `<stan>/AmiDrive.log`, otwierany na czas przejścia (między przejściami można go
   czytać), po 64 KB przenoszony do `AmiDrive.log.old`.
 - Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.

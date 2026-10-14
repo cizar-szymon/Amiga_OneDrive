@@ -27,12 +27,20 @@ static unsigned long last_save;
 static PlatFile *out_file;
 
 static char ierr[200];           /* message of the last failure */
+static SyncProgress prog;
+static unsigned long prog_base;  /* prog.done before the current file */
 static char msg[PATH_SIZE + 200];
 static char dir[PATH_SIZE], target[PATH_SIZE], oldp[PATH_SIZE], tmp[PATH_SIZE], alt[PATH_SIZE];
 static char lname[FS_MAXNAME_LONG + 8];
 static char shown[256];
 
 /* ---- messages ------------------------------------------------------------------------- */
+
+static void report(void)
+{
+    if (cfg->progress)
+        cfg->progress(cfg->ud, &prog);
+}
 
 static void say(const char *what, const char *path, const char *why)
 {
@@ -297,6 +305,9 @@ static int do_folder(const GraphItem *it, StEntry *old)
 static int sink(void *ud, const void *data, long len)
 {
     (void)ud;
+    prog.file_done += (unsigned long)len;
+    prog.done = prog_base + prog.file_done;
+    report();
     return plat_write(out_file, data, len);
 }
 
@@ -306,7 +317,10 @@ static int download(const GraphItem *it, unsigned long *got)
     const char *tok;
     int rc = AD_ERR_AUTH, attempt;
 
+    prog.file = target;
+    prog.file_size = it->size;
     for (attempt = 0; attempt < 2 && rc == AD_ERR_AUTH; attempt++) {
+        prog.file_done = 0;
         if (!(tok = token(attempt > 0, &rc)))
             return rc;
         if (!(out_file = plat_create(tmp))) {
@@ -383,6 +397,7 @@ static int do_file(const GraphItem *it, StEntry *old)
         lt = info.date;
     stats->downloaded++;
     stats->bytes += got;
+    prog.files++;
     sprintf(ierr, "%lu bytes", got);
     say("Downloaded", target, ierr);
     return put_item(it, lt);
@@ -401,6 +416,7 @@ static int reserved(const GraphItem *it)
 static int apply_item(const GraphItem *it)
 {
     StEntry *old;
+    int rc;
 
     if ((it->flags & GI_ROOT) || strcmp(it->id, st->root_id) == 0)
         return AD_OK;
@@ -420,7 +436,17 @@ static int apply_item(const GraphItem *it)
             it->flags & GI_NAMECUT ? "name too long" : "not a file");
         return AD_OK;
     }
-    return (it->flags & GI_FOLDER) ? do_folder(it, old) : do_file(it, old);
+    if (it->flags & GI_FOLDER)
+        return do_folder(it, old);
+    prog_base = prog.done;
+    rc = do_file(it, old);
+    prog.file = NULL;
+    if (rc != SYNC_PENDING && !(it->flags & GI_TOOBIG))
+        prog.done = prog_base + it->size;   /* downloaded, equal or kept: handled */
+    else
+        prog.done = prog_base;
+    report();
+    return rc;
 }
 
 static void drop_pending(const char *id)
@@ -447,6 +473,8 @@ static int apply(void *ud, const GraphItem *it)
     (void)ud;
     if (plat_break())
         return AD_ERR_BREAK;
+    prog.items++;
+    report();
     drop_pending(it->id);               /* the last occurrence of an item counts */
     rc = apply_item(it);
     if (rc != SYNC_PENDING) {
@@ -665,8 +693,16 @@ static int scan_dir(const char *dir_id, NewItem *pdir)
 
 static long source(void *ud, void *buf, long len)
 {
+    long n;
+
     (void)ud;
-    return plat_read(in_file, buf, len);
+    n = plat_read(in_file, buf, len);
+    if (n > 0) {
+        prog.file_done += (unsigned long)n;
+        prog.done = prog_base + prog.file_done;
+        report();
+    }
+    return n;
 }
 
 /* entry for an item made / changed on OneDrive, with its local name */
@@ -707,12 +743,18 @@ static int upload(NewItem *n, const char *parent, const char *name, const char *
             strcpy(ierr, "cannot read the file");
             return AD_ERR;
         }
+        prog.file = n->path;
+        prog.file_size = n->size;
+        prog.file_done = 0;
         rc = graph_upload(cfg->graph, cfg->dl, tok, parent, name, id, etag, n->size,
                           tz_to_utc(cfg->tz, n->date), source, NULL, up_buf, GRAPH_CHUNK,
                           &up_item, ierr, (int)sizeof(ierr));
         plat_close(in_file, 0);
         in_file = NULL;
     }
+    prog.file = NULL;
+    if (rc == AD_OK)
+        prog.files++;
     return rc;
 }
 
@@ -903,7 +945,7 @@ static int push_changes(void)
     StEntry *e;
     NewItem *n;
     long missing = 0;
-    int rc;
+    int rc, counted;
 
     items_head = NULL;
     items_tail = &items_head;
@@ -913,6 +955,9 @@ static int push_changes(void)
         return AD_OK;
     strcpy(spath, cfg->local);
     scan_depth = 0;
+    prog.phase = SYNC_SCAN;
+    prog.file = NULL;
+    report();
     rc = scan_dir(st->root_id, NULL);
     if (rc != AD_OK) {
         free_items();
@@ -925,12 +970,24 @@ static int push_changes(void)
         return AD_OK;
     }
 
+    /* what is to be sent: the files new or changed here (renames turn out on the way) */
+    prog.phase = SYNC_SEND;
+    prog.done = prog.total = 0;
+    for (n = items_head; n; n = n->next)
+        if (!n->dir && !n->skip)
+            prog.total += n->size;
+    report();
     for (n = items_head; n && rc == AD_OK; n = n->next) {
         if (plat_break()) {
             rc = AD_ERR_BREAK;
             break;
         }
+        prog_base = prog.done;
+        counted = !n->mod_id && !n->dir && !n->skip;    /* as summed above */
         rc = n->mod_id ? AD_OK : push_new(n);
+        if (counted)
+            prog.done = prog_base + n->size;            /* sent, renamed or failed */
+        report();
         maybe_save(0);
     }
     for (n = items_head; n && rc == AD_OK; n = n->next) {
@@ -938,7 +995,12 @@ static int push_changes(void)
             rc = AD_ERR_BREAK;
             break;
         }
+        prog_base = prog.done;
+        counted = n->mod_id && !n->skip;
         rc = n->mod_id ? push_changed(n) : AD_OK;
+        if (counted)
+            prog.done = prog_base + n->size;
+        report();
         maybe_save(0);
     }
 
@@ -1030,6 +1092,8 @@ int sync_run(const SyncConfig *c, State *s, SyncStats *ss, char *err, int errsiz
     st = s;
     stats = ss;
     memset(stats, 0, sizeof(*stats));
+    memset(&prog, 0, sizeof(prog));
+    prog.phase = SYNC_CLOUD;
     pending = NULL;
     dirty = 0;
     last_save = plat_now();
@@ -1068,6 +1132,10 @@ int sync_run(const SyncConfig *c, State *s, SyncStats *ss, char *err, int errsiz
         dirty = 1;
     }
 
+    /* the whole folder is listed: its size is the work to do (folders give the sum) */
+    if (!st->delta[0] && !(root.flags & GI_TOOBIG))
+        prog.total = root.size;
+    report();
     rc = read_changes(link, (int)sizeof(link));
     if (rc == AD_ERR_GONE && st->delta[0]) {
         say("Reading the whole folder again:", show(cfg->remote), "the list of changes expired");

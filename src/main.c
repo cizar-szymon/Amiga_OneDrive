@@ -50,6 +50,7 @@
 #include "amidrive.h"
 #include "appicon_amiga.h"
 #include "clock_amiga.h"
+#include "status_amiga.h"
 #include "auth.h"
 #include "config.h"
 #include "fsmap.h"
@@ -63,7 +64,8 @@
 
 size_t __stack = 65536;                 /* OpenSSL needs more than the Shell default */
 
-const char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDRIVE_DATE ")";
+/* in the data hunk: in the code hunk (const) Version showed "Drive 0.3.2" */
+char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDRIVE_DATE ")";
 
 #define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
                  "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K,CLOCK/K,SETCLOCK/S"
@@ -645,11 +647,213 @@ static void print_time(void)
     note("%s ", (LONG)iso);
 }
 
+/* ---- the status window: progress of a pass, or the state between passes -------------- */
+
+static struct {
+    struct DateStamp pass_start, phase_start;
+    int phase, auto_shown;
+    unsigned long xfer;                 /* bytes really transferred in this phase */
+    const char *last_file;
+    unsigned long last_done;            /* file_done at the last report */
+    long last_draw;                     /* ticks since phase_start */
+} pg;
+static char last_result[120];           /* "12:31 no changes", for the idle window */
+static unsigned long next_check;        /* local time of the next pass, 0 = none */
+
+/* 1234 -> "1234 bytes", "880 KB", "12.3 MB" */
+static void fmt_bytes(unsigned long b, char *out)
+{
+    if (b < 10000UL)
+        sprintf(out, "%lu bytes", b);
+    else if (b < 1000000UL)
+        sprintf(out, "%lu KB", (b + 512) / 1024);
+    else
+        sprintf(out, "%lu.%lu MB", b / 1048576UL, (b % 1048576UL) * 10 / 1048576UL);
+}
+
+/* seconds -> "about 40 s", "about 3 min", "about 1 h 20 min" */
+static void fmt_left(unsigned long s, char *out)
+{
+    if (s < 60)
+        sprintf(out, "about %lu s left", s < 5 ? 5UL : (s + 4) / 5 * 5);
+    else if (s < 3600)
+        sprintf(out, "about %lu min left", (s + 30) / 60);
+    else
+        sprintf(out, "about %lu h %lu min left", s / 3600, s / 60 % 60);
+}
+
+/* the path below LOCAL ("Gry/a.adf") */
+static const char *below_local(const char *path)
+{
+    size_t n = strlen(cfg.local);
+
+    if (strncmp(path, cfg.local, n) == 0) {
+        path += n;
+        if (*path == '/')
+            path++;
+    }
+    return path;
+}
+
+/* done of total in percent, without overflowing 32 bits */
+static int percent_of(unsigned long done, unsigned long total)
+{
+    unsigned long p;
+
+    if (!total)
+        return -1;
+    p = total >= 0x01000000UL ? done / (total / 100) : done * 100 / total;
+    return p > 100 ? 100 : (int)p;
+}
+
+static void show_idle(void)
+{
+    static char l2[160], l3[80], t[24];
+
+    if (!status_is_open())
+        return;
+    sprintf(l2, "Last check: %s", last_result[0] ? last_result : "none yet");
+    if (next_check) {
+        tz_format_iso8601(next_check, t);
+        t[16] = '\0';
+        sprintf(l3, "Next check at %s (or Tools > AmiDrive: synchronise now)", t + 11);
+    } else {
+        l3[0] = '\0';
+    }
+    status_show("Up to date - waiting for the next check", l2, l3, -1);
+}
+
+static void show_progress(const SyncProgress *p)
+{
+    static char l1[100], l2[200], l3[160], a[24], b[24], c[40];
+    long t = ticks_since(&pg.phase_start);
+    unsigned long rate = 0;
+    int pct = percent_of(p->done, p->total);
+    const char *what = p->phase == SYNC_SEND ? "Sending to OneDrive" : "Getting the changes from OneDrive";
+
+    if (t >= 50)                        /* bytes per second, after a second */
+        rate = pg.xfer > 40000000UL ? pg.xfer / (unsigned long)t * 50 : pg.xfer * 50 / (unsigned long)t;
+
+    if (p->phase == SYNC_SCAN) {
+        status_show("Looking for changes on the Amiga", cfg.local, "", -1);
+        return;
+    }
+    if (pct >= 0)
+        sprintf(l1, "%s: %d %%", what, pct);
+    else
+        strcpy(l1, what);
+
+    if (p->file) {
+        fmt_bytes(p->file_done, a);
+        fmt_bytes(p->file_size, b);
+        sprintf(l2, "%.120s  (%s of %s)", below_local(p->file), a, b);
+        if (pct < 0)                    /* the whole is unknown: the bar shows the file */
+            pct = percent_of(p->file_done, p->file_size);
+    } else if (p->phase == SYNC_CLOUD) {
+        sprintf(l2, "%ld items of OneDrive read", p->items);
+    } else {
+        l2[0] = '\0';
+    }
+
+    if (p->total) {
+        fmt_bytes(p->done, a);
+        fmt_bytes(p->total, b);
+        sprintf(l3, "%s of %s", a, b);
+    } else {
+        fmt_bytes(p->done, a);
+        sprintf(l3, "%ld files, %s", p->files, a);
+    }
+    if (rate) {
+        fmt_bytes(rate, b);
+        sprintf(l3 + strlen(l3), ", %s/s", b);
+        if (p->total && t >= 250 && p->total > p->done) {      /* an estimate after 5 s */
+            fmt_left((p->total - p->done) / rate, c);
+            sprintf(l3 + strlen(l3), ", %s", c);
+        }
+    }
+    status_show(l1, l2, l3, pct);
+}
+
+/* sync_run progress: the icon and the window answer during the pass too */
+static void sync_progress(void *ud, const SyncProgress *p)
+{
+    long t;
+    int r, force = 0;
+
+    (void)ud;
+    if (p->phase != pg.phase) {         /* a new phase: speed counted again */
+        pg.phase = p->phase;
+        pg.xfer = 0;
+        pg.last_draw = -1000;
+        DateStamp(&pg.phase_start);
+        force = 1;
+    }
+    if (p->file != pg.last_file || p->file_done < pg.last_done) {
+        pg.last_file = p->file;
+        pg.last_done = 0;
+        force = 1;
+    }
+    if (p->file) {
+        pg.xfer += p->file_done - pg.last_done;
+        pg.last_done = p->file_done;
+    }
+
+    r = appicon_poll();
+    if (r & APPICON_STOP)
+        Signal(FindTask(NULL), SIGBREAKF_CTRL_C);       /* the pass ends at the next check */
+    if (r & APPICON_STATUS)
+        force |= status_open();
+    status_handle();
+
+    /* a long first listing: show the window once by itself (closed: stays closed) */
+    if (!pg.auto_shown && p->total && cfg.appicon[0] == 'Y' && ticks_since(&pg.pass_start) >= 500) {
+        pg.auto_shown = 1;
+        force |= status_open();
+    }
+    if (!status_is_open())
+        return;
+    t = ticks_since(&pg.phase_start);
+    if (!force && t - pg.last_draw < 25)                /* at most twice a second */
+        return;
+    pg.last_draw = t;
+    show_progress(p);
+}
+
+static void pass_ends(int rc, const SyncStats *ss, const char *err, int once)
+{
+    char t[24];
+    long changes = ss->downloaded + ss->moved + ss->deleted + ss->folders + ss->uploaded +
+                   ss->remote_moved + ss->remote_deleted + ss->remote_folders;
+
+    tz_format_iso8601(plat_local_now(), t);
+    t[16] = '\0';
+    if (rc != AD_OK)
+        sprintf(last_result, "%s stopped: %.80s", t + 11, rc == AD_ERR_BREAK ? "interrupted" : err);
+    else if (!changes)
+        sprintf(last_result, "%s no changes%s", t + 11, ss->failed ? " (some failed, tried again)" : "");
+    else
+        sprintf(last_result, "%s %ld downloaded, %ld sent, %ld other changes%s", t + 11,
+                ss->downloaded, ss->uploaded, changes - ss->downloaded - ss->uploaded,
+                ss->failed ? ", some failed" : "");
+    next_check = once ? 0 : plat_local_now() + (unsigned long)cfg.interval * 60;
+    show_idle();
+}
+
+static void pass_begins(void)
+{
+    memset(&pg, 0, sizeof(pg));
+    DateStamp(&pg.pass_start);
+    pg.phase_start = pg.pass_start;
+    next_check = 0;
+    if (status_is_open())
+        status_show("Getting the changes from OneDrive", "Connecting ...", "", -1);
+}
+
 /* Wait secs between passes. AD_OK: time is up or "synchronise now" (AppIcon menu or
  * files dropped on it); AD_ERR_BREAK: Ctrl-C or "stop". */
 static int wait_next(long secs)
 {
-    ULONG sig = appicon_signal();
+    ULONG sig = appicon_signal(), wsig;
     long steps = secs * 5;              /* 1/5 s steps, like plat_sleep */
     int r;
 
@@ -662,7 +866,11 @@ static int wait_next(long secs)
                 return AD_ERR_BREAK;
             if (r & APPICON_SYNC)
                 return AD_OK;
+            if ((r & APPICON_STATUS) && status_open())
+                show_idle();
         }
+        if ((wsig = status_signal()) != 0 && (SetSignal(0, wsig) & wsig))
+            status_handle();
         if (steps-- <= 0)
             return AD_OK;
         Delay(TICKS_PER_SECOND / 5);
@@ -743,6 +951,7 @@ static int cmd_sync(int once)
     sc.upload = cfg.upload[0] == 'Y';
     sc.token = sync_token;
     sc.log = sync_log;
+    sc.progress = sync_progress;
 
     state_init(&state);
     if (state_load(&state, state_file) == AD_ERR_PROTO)
@@ -756,7 +965,9 @@ static int cmd_sync(int once)
         sc.maxname = plat_name_limit(cfg.local);
         print_time();
         note("Checking OneDrive %s -> %s\n", (LONG)cfg.remote, (LONG)cfg.local);
+        pass_begins();
         rc = sync_run(&sc, &state, &ss, err, sizeof(err));
+        pass_ends(rc, &ss, err, once);
         /* the connections are not kept for minutes of waiting */
         sess_close(&graph_sess);
         sess_close(&dl_sess);
@@ -796,6 +1007,7 @@ static int cmd_sync(int once)
         }
     }
     appicon_close();
+    status_close();
     if (rc == AD_ERR_AUTH)
         say("Sign in again: %s LOGIN\n", (LONG)AMIDRIVE_NAME);
     if (rc == AD_ERR_BREAK) {
@@ -1085,6 +1297,7 @@ int main(int argc, char **argv)
     if (plat_break())
         note("*** Break\n");
     appicon_close();
+    status_close();
     log_close();
     instance_release();
     sess_close(&login_sess);

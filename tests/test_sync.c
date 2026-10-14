@@ -35,6 +35,19 @@ static void log_fn(void *ud, const char *m)
     }
 }
 
+/* progress: the last report, and reports with more done than the whole */
+static SyncProgress lastp;
+static long prog_calls, prog_bad;
+
+static void progress_fn(void *ud, const SyncProgress *p)
+{
+    (void)ud;
+    lastp = *p;
+    prog_calls++;
+    if ((p->total && p->done > p->total) || (p->file && p->file_done > p->file_size))
+        prog_bad++;
+}
+
 /* one delta item */
 static const char *item(const char *id, const char *parent, const char *name, const char *facet,
                         unsigned long size, const char *ctag)
@@ -94,7 +107,9 @@ static void finish(void)
 static const char *root_json(const char *id)
 {
     static char b[200];
-    sprintf(b, "{\"id\":\"%s\",\"name\":\"Amiga\",\"parentReference\":{\"id\":\"TOP\"},\"folder\":{}}", id);
+    /* size: the sum of the files of the first pass below (the whole work of a full listing) */
+    sprintf(b, "{\"id\":\"%s\",\"name\":\"Amiga\",\"size\":16,\"parentReference\":{\"id\":\"TOP\"},"
+               "\"folder\":{}}", id);
     return http_resp(200, NULL, b);
 }
 
@@ -327,6 +342,7 @@ void test_sync(void)
     cfg.tz = &tz;
     cfg.token = tok_fn;
     cfg.log = log_fn;
+    cfg.progress = progress_fn;
     state_init(&st);
 
     /* ---- first pass: everything is new ---- */
@@ -386,6 +402,14 @@ void test_sync(void)
     CHECK(strstr(logbuf, "Kept (changed on the Amiga) as W:OneDrive/b-Amiga.txt\n") != NULL);
     CHECK(strstr(logbuf, "Downloaded W:OneDrive/Gry/Demo/c.txt: 2 bytes\n") != NULL);
     CHECK_INT(fake_connects, 2);
+    /* progress of the full listing: the folder size is the whole, all of it handled */
+    CHECK_INT(lastp.phase, SYNC_CLOUD);
+    CHECK_INT((long)lastp.total, 16);
+    CHECK_INT((long)lastp.done, 16);
+    CHECK_INT(lastp.files, 4);
+    CHECK_INT(lastp.items, 10);
+    CHECK(lastp.file == NULL);
+    CHECK(prog_calls > 10);
     finish();
 
     /* the saved state is the same */
@@ -563,4 +587,8 @@ void test_sync(void)
     fake_fs_reset();
 
     test_upload();
+    /* sending: the whole is the size of the files to send; never more done than that */
+    CHECK_INT(lastp.phase, SYNC_SEND);
+    CHECK_INT((long)lastp.done, (long)lastp.total);
+    CHECK_INT(prog_bad, 0);
 }

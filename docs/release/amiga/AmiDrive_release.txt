@@ -5,6 +5,15 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.3.2 (14.10.2026)
+------------------
+- Okno postępu: co się dzieje, pasek z procentami, bieżący plik, prędkość
+  i szacowany czas do końca; między synchronizacjami wynik ostatniej
+  i godzina następnej. Menu Narzędzia: "AmiDrive: status".
+- Dwuklik na ikonie "OneDrive" otwiera szufladę od razu, także w trakcie
+  długiej synchronizacji (wcześniej czekał do jej końca), i pokazuje postęp.
+- "AmiDrive: stop" działa w trakcie synchronizacji.
+
 0.3.1 (14.10.2026)
 ------------------
 - Zły zegar Amigi: okno z czasem Amigi i czasem z internetu i przyciskiem

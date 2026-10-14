@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <exec/types.h>
+#include <exec/lists.h>
 #include <dos/dos.h>
 #include <dos/dostags.h>
 #include <utility/tagitem.h>
@@ -12,19 +13,21 @@
 #include <proto/dos.h>
 #include <proto/icon.h>
 #include <proto/wb.h>
+#include <clib/alib_protos.h>
 
 #include "appicon_amiga.h"
 
 #define PATH_SIZE 512
 
-enum { MENU_SYNC = 1, MENU_STOP = 2 };
+enum { MENU_SYNC = 1, MENU_STOP = 2, MENU_STATUS = 3 };
 
 struct Library *WorkbenchBase;
 struct Library *IconBase;
 
 static struct MsgPort *port;
 static struct AppIcon *icon;
-static struct AppMenuItem *menu_sync, *menu_stop;
+static struct AppMenuItem *menu_sync, *menu_stop, *menu_status;
+static struct MinList later;            /* files dropped during a pass, not answered yet */
 static struct DiskObject *dob;
 static char local_dir[PATH_SIZE];       /* LOCAL as given (opened by double-click) */
 static char local_full[PATH_SIZE];      /* LOCAL from its lock: to refuse drops from inside */
@@ -81,6 +84,8 @@ int appicon_open(const char *label, const char *local, const char *progname,
         appicon_close();                /* no Workbench running (or no memory) */
         return 0;
     }
+    NewList((struct List *)&later);
+    menu_status = AddAppMenuItemA(MENU_STATUS, 0, (STRPTR)"AmiDrive: status", port, NULL);
     menu_sync = AddAppMenuItemA(MENU_SYNC, 0, (STRPTR)"AmiDrive: synchronise now", port, NULL);
     menu_stop = AddAppMenuItemA(MENU_STOP, 0, (STRPTR)"AmiDrive: stop", port, NULL);
     return 1;
@@ -150,6 +155,37 @@ static int copy_in(const struct WBArg *a)
     return rc == 0;
 }
 
+static int menu_flag(const struct AppMessage *am)
+{
+    return am->am_ID == MENU_STOP ? APPICON_STOP : am->am_ID == MENU_STATUS ? APPICON_STATUS :
+           APPICON_SYNC;
+}
+
+int appicon_poll(void)
+{
+    struct AppMessage *am;
+    int r = 0;
+
+    if (!icon)
+        return 0;
+    while ((am = (struct AppMessage *)GetMsg(port)) != NULL) {
+        if (am->am_Type == AMTYPE_APPICON && am->am_NumArgs > 0) {
+            AddTail((struct List *)&later, (struct Node *)am);  /* copied after the pass */
+            sprintf(msg, "Files dropped on the icon: copied when this pass is done");
+            say();
+            continue;
+        }
+        if (am->am_Type == AMTYPE_APPMENUITEM)
+            r |= menu_flag(am);
+        else if (am->am_Type == AMTYPE_APPICON && am->am_Class == AMCLASSICON_Open) {
+            open_drawer();
+            r |= APPICON_STATUS;        /* the files are coming: show what is going on */
+        }
+        ReplyMsg((struct Message *)am);
+    }
+    return r;
+}
+
 int appicon_handle(void)
 {
     struct AppMessage *am;
@@ -158,9 +194,12 @@ int appicon_handle(void)
 
     if (!icon)
         return 0;
-    while ((am = (struct AppMessage *)GetMsg(port)) != NULL) {
+    for (;;) {
+        if ((am = (struct AppMessage *)RemHead((struct List *)&later)) == NULL &&
+            (am = (struct AppMessage *)GetMsg(port)) == NULL)
+            break;
         if (am->am_Type == AMTYPE_APPMENUITEM) {
-            r |= am->am_ID == MENU_STOP ? APPICON_STOP : APPICON_SYNC;
+            r |= menu_flag(am);
         } else if (am->am_Type == AMTYPE_APPICON) {
             if (am->am_NumArgs == 0) {
                 /* before V44 am_Class is 0 = AMCLASSICON_Open too */
@@ -181,6 +220,12 @@ void appicon_close(void)
 {
     struct Message *m;
 
+    if (icon)                           /* dropped files never copied: answer them */
+        while ((m = (struct Message *)RemHead((struct List *)&later)) != NULL)
+            ReplyMsg(m);
+    if (menu_status)
+        RemoveAppMenuItem(menu_status);
+    menu_status = NULL;
     if (menu_stop)
         RemoveAppMenuItem(menu_stop);
     if (menu_sync)
