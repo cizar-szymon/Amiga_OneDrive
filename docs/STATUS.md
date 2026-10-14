@@ -27,7 +27,7 @@
 | `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki, usuwanie, zmiana nazwy, podfolder); ⏳ przeniesienie, długie nazwy, zagnieżdżenie |
 | `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
 | `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ `ONCE` na A1200; ⏳ praca w tle |
-| Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy); A1200 z kontem Business: nowe pliki ⏳ reszta |
+| Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
 
@@ -50,6 +50,19 @@
 - A1200, etap 2 (14.10.2026): pliki dodane na Amidze (`Copy_of_WhichAmiga` 20 KB + `.info`)
   wysłane do `Retro/AmigaDrive`; następne przejście „no changes” (własne wysyłki wracają
   w delcie z tym samym cTag).
+  Dalej (14.10.2026), każdy krok `ONCE` i potem drugie przejście „no changes”; stan chmury
+  sprawdzany drugą kopią (`LOCAL=RAM:Check`, osobny stan, ta sama chmura – działała też jako
+  drugi klient do konfliktów):
+  - nowy plik `test-up.txt` → wysłany; zmiana treści → „Uploaded new version” (`If-Match`);
+  - zmiana nazwy na Amidze i przeniesienie do `podfolder` → `PATCH` bez wysyłania; w chmurze
+    poprawna treść i data;
+  - konflikt (plik zmieniony w drugiej kopii i na Amidze): wersja z chmury pobrana pod
+    właściwą nazwą, wersja z Amigi jako `test-moved-Amiga.txt` wysłana jako nowy plik;
+  - plik usunięty na Amidze, a zmieniony w chmurze → wraca z chmury;
+  - usunięcie plików → usunięte w chmurze; nowy folder z plikiem → folder, potem plik;
+    zmiana nazwy folderu → nowy folder + przeniesienie pliku + usunięcie starego (zgodnie
+    z opisem w ograniczeniach); usunięcie folderu z zawartością → jedno usunięcie folderu.
+  Na koniec chmura w stanie sprzed testów (kopia w `RAM:Check` usunęła pliki testowe).
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
