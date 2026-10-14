@@ -5,6 +5,11 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.3.6 (14.10.2026)
+------------------
+- Okno AmiDrive w lewym górnym rogu, pod nim szuflada z plikami tej samej
+  szerokości; węższe przyciski blisko siebie, mniejsze okno.
+
 0.3.5 (14.10.2026)
 ------------------
 - Szuflada z plikami otwiera się jako lista wszystkich plików według nazw,

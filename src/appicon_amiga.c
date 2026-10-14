@@ -16,6 +16,7 @@
 #include <clib/alib_protos.h>
 
 #include "appicon_amiga.h"
+#include "status_amiga.h"
 
 #define PATH_SIZE 512
 
@@ -69,6 +70,7 @@ static void drawer_icon(void)
     struct DiskObject *d;
     size_t n = strlen(local_dir);
     BPTR lock;
+    int x = 64, y = 140, w = 340, h = 120;
 
     if (!n || local_dir[n - 1] == ':' || local_dir[n - 1] == '/')
         return;
@@ -82,10 +84,12 @@ static void drawer_icon(void)
     if (!(d = GetDefDiskObject(WBDRAWER)))
         return;
     if (d->do_DrawerData) {
-        d->do_DrawerData->dd_NewWindow.LeftEdge = 60;
-        d->do_DrawerData->dd_NewWindow.TopEdge = 40;
-        d->do_DrawerData->dd_NewWindow.Width = 520;
-        d->do_DrawerData->dd_NewWindow.Height = 300;
+        if (status_layout(&x, &y, &w, &h))  /* below the AmiDrive window, as wide */
+            y += h + 2;
+        d->do_DrawerData->dd_NewWindow.LeftEdge = (WORD)x;
+        d->do_DrawerData->dd_NewWindow.TopEdge = (WORD)y;
+        d->do_DrawerData->dd_NewWindow.Width = (WORD)w;
+        d->do_DrawerData->dd_NewWindow.Height = 240;
         d->do_DrawerData->dd_Flags = DDFLAGS_SHOWALL;
         d->do_DrawerData->dd_ViewModes = DDVM_BYNAME;
     }

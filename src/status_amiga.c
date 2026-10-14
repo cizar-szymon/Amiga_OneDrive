@@ -15,9 +15,11 @@
 #include "amidrive.h"
 #include "status_amiga.h"
 
-#define WIN_WIDTH 360                   /* inner width */
+#define WIN_WIDTH 300                   /* inner width */
 #define MARGIN    8
-#define BUTTON_W  84
+#define BUTTON_W  70
+#define BUTTON_GAP 6
+#define WIN_LEFT  64                    /* top left, beside the column of disk icons */
 
 enum { GID_SYNC = 1, GID_STOP, GID_HIDE };
 
@@ -100,7 +102,7 @@ static struct Gadget *make_buttons(struct Screen *scr, int top, int fh)
     static const char *const labels[3] = { "Sync now", "Stop", "Hide" };
     struct NewGadget ng;
     struct Gadget *g;
-    int i, gap = (WIN_WIDTH - 2 * MARGIN - 3 * BUTTON_W) / 2;
+    int i, x0 = (WIN_WIDTH - 3 * BUTTON_W - 2 * BUTTON_GAP) / 2;    /* centred, close together */
 
     if (!(g = CreateContext(&glist)))
         return NULL;
@@ -109,10 +111,10 @@ static struct Gadget *make_buttons(struct Screen *scr, int top, int fh)
     ng.ng_VisualInfo = vi;
     ng.ng_TopEdge = (WORD)top;
     ng.ng_Width = BUTTON_W;
-    ng.ng_Height = (WORD)(fh + 4);
+    ng.ng_Height = (WORD)(fh + 6);
     ng.ng_Flags = PLACETEXT_IN;
     for (i = 0; i < 3 && g; i++) {
-        ng.ng_LeftEdge = (WORD)(scr->WBorLeft + MARGIN + i * (BUTTON_W + gap));
+        ng.ng_LeftEdge = (WORD)(scr->WBorLeft + x0 + i * (BUTTON_W + BUTTON_GAP));
         ng.ng_GadgetText = (STRPTR)labels[i];
         ng.ng_GadgetID = (UWORD)(GID_SYNC + i);
         g = CreateGadget(BUTTON_KIND, g, &ng, GA_Disabled, (ULONG)(i == 0 && busy), TAG_DONE);
@@ -120,6 +122,36 @@ static struct Gadget *make_buttons(struct Screen *scr, int top, int fh)
             gsync = g;
     }
     return g;
+}
+
+/* inner height for the screen's font */
+static int inner_height(int fh)
+{
+    return 4 * fh + 24 + 4 + fh + 6 + 6;            /* text, gap, buttons, bottom */
+}
+
+int status_layout(int *left, int *top, int *width, int *height)
+{
+    struct Library *ib = NULL;
+    struct Screen *scr;
+
+    if (!IntuitionBase && !(ib = OpenLibrary((STRPTR)"intuition.library", 37)))
+        return 0;
+    if (ib)
+        IntuitionBase = (struct IntuitionBase *)ib;
+    if ((scr = LockPubScreen(NULL)) != NULL) {
+        *left = WIN_LEFT;
+        *top = scr->BarHeight + 3;
+        *width = WIN_WIDTH + scr->WBorLeft + scr->WBorRight;
+        *height = inner_height(scr->RastPort.TxHeight) + scr->WBorTop + scr->Font->ta_YSize + 1 +
+                  scr->WBorBottom;
+        UnlockPubScreen(NULL, scr);
+    }
+    if (ib) {
+        CloseLibrary(ib);
+        IntuitionBase = NULL;
+    }
+    return scr != NULL;
 }
 
 int status_open(void)
@@ -147,11 +179,11 @@ int status_open(void)
     }
     win = OpenWindowTags(NULL,
                          WA_PubScreen, (ULONG)scr,
-                         /* at the right edge: the drawer with the files opens on the left */
-                         WA_Left, (ULONG)(scr->Width > WIN_WIDTH + 60 ? scr->Width - WIN_WIDTH - 40 : 0),
-                         WA_Top, (ULONG)(scr->BarHeight + 30),
+                         /* top left; the drawer with the files opens below it, as wide */
+                         WA_Left, WIN_LEFT,
+                         WA_Top, (ULONG)(scr->BarHeight + 3),
                          WA_InnerWidth, WIN_WIDTH,
-                         WA_InnerHeight, (ULONG)(text_bottom - top + fh + 12),
+                         WA_InnerHeight, (ULONG)inner_height(fh),
                          WA_Title, (ULONG)AMIDRIVE_NAME " - OneDrive",
                          WA_Gadgets, (ULONG)glist,
                          WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE,

@@ -14,6 +14,10 @@
 #define STATUS_SYNC   2                 /* "Synchronise now" */
 #define STATUS_STOP   4                 /* "Stop AmiDrive" */
 
+/* Where the window opens (outer size) on the Workbench screen; the drawer with the
+ * files is placed below it, as wide. Returns 0 without a screen. */
+int status_layout(int *left, int *top, int *width, int *height);
+
 /* Open the window (or bring it to the front). Returns 1 if it is open. */
 int status_open(void);
 int status_is_open(void);
