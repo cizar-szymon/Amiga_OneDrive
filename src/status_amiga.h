@@ -15,6 +15,11 @@
 #define STATUS_SYNC   2                 /* "Sync now" (also ends a pause) */
 #define STATUS_STOP   4                 /* "Stop": stop the synchronisation, pause */
 #define STATUS_QUIT   8                 /* "Quit": end AmiDrive */
+#define STATUS_MENU   16                /* a menu item: status_menu() says which */
+
+/* status_menu() results: 1..3 an account, or: */
+#define STATUS_M_SIGNIN  10
+#define STATUS_M_SIGNOUT 11
 
 /* Where the window opens (outer size) on the Workbench screen; the drawer with the
  * files is placed below it, as wide. Returns 0 without a screen. */
@@ -30,6 +35,18 @@ ULONG status_signal(void);
 
 /* Handle the window's messages. Returns STATUS_ flags. */
 int status_handle(void);
+
+/* The menu "Account": names of the 3 accounts (NULL / "" = empty), the active one,
+ * whether it is signed in ("Sign out" disabled when not). Also the window title. */
+void status_accounts(const char *const names[3], int active, int signed_in);
+
+/* The last menu item picked (then 0). */
+int status_menu(void);
+
+/* Modal dialogs on the Workbench screen. 1 = OK (buf filled), 0 = cancelled. */
+int status_ask_string(const char *title, const char *prompt, char *buf, int size);
+int status_ask_drawer(const char *title, const char *initial, char *buf, int size);
+void status_message(const char *text);
 
 /* busy: a pass is running ("Synchronise now" is disabled). */
 void status_busy(int busy);

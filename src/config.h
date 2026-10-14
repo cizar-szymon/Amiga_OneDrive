@@ -12,6 +12,11 @@
 #define CFG_TOKEN_FILE "ENVARC:AmiDrive/token"
 
 #define CFG_INTERVAL_DEFAULT 3          /* minutes between checks in the background */
+#define CFG_ACCOUNTS 3                  /* OneDrive accounts; one is active at a time */
+
+/* Accounts: account 1 keeps LOCAL, REMOTE, STATE, NAME in the prefs file with the other
+ * settings; accounts 2 and 3 keep them in ENVARC:AmiDrive/Account<n>.prefs. Each account
+ * has its own token (token, token2, token3). */
 
 typedef struct {
     char local[CFG_PATH_SIZE];          /* Amiga directory, e.g. Work:OneDrive */
@@ -24,6 +29,8 @@ typedef struct {
     long interval;                      /* minutes */
     char client_id[48];
     char tenant[40];
+    int account;                        /* the active account, 1..CFG_ACCOUNTS */
+    char name[64];                      /* the account as shown (owner of the OneDrive) */
 } Config;
 
 void config_defaults(Config *c);
@@ -38,6 +45,12 @@ int config_set(Config *c, const char *key, const char *value);
 
 /* Write all settings as text. Returns the length or AD_ERR_TOOBIG. */
 int config_format(const Config *c, char *buf, size_t size);
+
+/* Only the keys of an account (LOCAL, REMOTE, STATE, NAME), for Account<n>.prefs. */
+int config_format_account(const Config *c, char *buf, size_t size);
+
+/* Empty the keys of an account (before reading another account's file). */
+void config_account_clear(Config *c);
 
 /* Value of KEY in "KEY=value" text (case-insensitive key, trailing spaces cut).
  * Returns the length, AD_ERR (missing) or AD_ERR_TOOBIG. */

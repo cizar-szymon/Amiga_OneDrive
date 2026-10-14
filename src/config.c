@@ -75,6 +75,7 @@ void config_defaults(Config *c)
     strcpy(c->upload, "YES");
     strcpy(c->appicon, "YES");
     strcpy(c->clock, "ASK");
+    c->account = 1;
     c->interval = CFG_INTERVAL_DEFAULT;
     strcpy(c->client_id, AMIDRIVE_CLIENT_ID);
     strcpy(c->tenant, AMIDRIVE_TENANT);
@@ -137,6 +138,14 @@ int config_set(Config *c, const char *key, const char *value)
         strcpy(c->clock, eq_ci(value, "ASK") ? "ASK" : eq_ci(value, "AUTO") ? "AUTO" : "NO");
         return AD_OK;
     }
+    if (eq_ci(key, "ACCOUNT")) {
+        if (value[0] < '1' || value[0] > '0' + CFG_ACCOUNTS || value[1])
+            return AD_ERR_PROTO;
+        c->account = value[0] - '0';
+        return AD_OK;
+    }
+    if (eq_ci(key, "NAME"))
+        return copy(c->name, sizeof(c->name), value) ? AD_ERR_PROTO : AD_OK;
     if (eq_ci(key, "INTERVAL"))
         return parse_minutes(value, &c->interval) ? AD_OK : AD_ERR_PROTO;
     /* empty: keep the built-in default */
@@ -150,7 +159,7 @@ int config_set(Config *c, const char *key, const char *value)
 int config_parse(Config *c, const char *text)
 {
     static const char *const keys[] = {
-        "LOCAL", "REMOTE", "STATE", "CHARSET", "UPLOAD", "APPICON", "CLOCK", "INTERVAL", "CLIENTID",
+        "LOCAL", "REMOTE", "STATE", "CHARSET", "UPLOAD", "APPICON", "CLOCK", "INTERVAL", "CLIENTID", "ACCOUNT", "NAME",
         "TENANT", NULL
     };
     char value[CFG_PATH_SIZE];
@@ -208,7 +217,30 @@ int config_format(const Config *c, char *buf, size_t size)
         !append(buf, size, &len, "CLOCK", c->clock) ||
         !append(buf, size, &len, "INTERVAL", num + i) ||
         !append(buf, size, &len, "CLIENTID", c->client_id) ||
-        !append(buf, size, &len, "TENANT", c->tenant))
+        !append(buf, size, &len, "TENANT", c->tenant) ||
+        !append(buf, size, &len, "ACCOUNT", c->account == 2 ? "2" : c->account == 3 ? "3" : "1") ||
+        !append(buf, size, &len, "NAME", c->name))
         return AD_ERR_TOOBIG;
     return (int)len;
+}
+
+int config_format_account(const Config *c, char *buf, size_t size)
+{
+    static const char head[] = "# AmiDrive account (the other settings are in AmiDrive.prefs)\n";
+    size_t len = sizeof(head) - 1;
+
+    if (size <= len)
+        return AD_ERR_TOOBIG;
+    memcpy(buf, head, len + 1);
+    if (!append(buf, size, &len, "LOCAL", c->local) ||
+        !append(buf, size, &len, "REMOTE", c->remote) ||
+        !append(buf, size, &len, "STATE", c->state) ||
+        !append(buf, size, &len, "NAME", c->name))
+        return AD_ERR_TOOBIG;
+    return (int)len;
+}
+
+void config_account_clear(Config *c)
+{
+    c->local[0] = c->remote[0] = c->state[0] = c->name[0] = '\0';
 }

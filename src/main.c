@@ -13,6 +13,8 @@
  *                           (plain TCP) against https:// (TLS), same code and buffers
  *   AmiDrive STOP           stop the AmiDrive running in the background (waits for it)
  *   AmiDrive SETCLOCK       set the Amiga clock (and battery clock) from the Internet
+ *   AmiDrive ACCOUNT=n ...  the OneDrive account 1..3 to use (remembered); each has its
+ *                           own sign-in, LOCAL and REMOTE (menu "Account" of the window)
  *            [CLOCK=ASK|AUTO|NO]            wrong clock: window / set it / nothing
  *
  * Settings: Shell arguments > Tool Types of the icon > the prefs file
@@ -71,10 +73,11 @@ char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDR
 
 #define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
                  "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K,CLOCK/K,SETCLOCK/S," \
-                 "URL/K,TO/K,RCVBUF/K/N"
+                 "URL/K,TO/K,RCVBUF/K/N,ACCOUNT/K"
 enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
        ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_WINDOW, ARG_STOP, ARG_APPICON,
-       ARG_CLOCK, ARG_SETCLOCK, ARG_URL, ARG_TO, ARG_RCVBUF, ARG_COUNT };
+       ARG_CLOCK, ARG_SETCLOCK, ARG_URL, ARG_TO, ARG_RCVBUF, ARG_ACCOUNT,
+       ARG_COUNT };
 
 /* the output window when started from Workbench: opens on the first output */
 #define WB_WINDOW "CON:40/30/600/180/" AMIDRIVE_NAME "/AUTO/CLOSE/WAIT"
@@ -105,6 +108,9 @@ static BPTR logfh;                      /* the log, open during a pass */
 static char log_path[CFG_PATH_SIZE + 32];
 static struct MsgPort *instance;        /* our public port while synchronising */
 static char tzsrc[80];                  /* where the time zone comes from: "TZ=..." or locale */
+static char token_file[48];             /* the active account's token */
+static int signed_in = 1;               /* the active account has a token */
+static int pending;                     /* a menu choice to do: 1..3 account, STATUS_M_SIGNIN/OUT */
 static char progname[108];              /* our program file (image of the AppIcon) */
 
 /* ---- output: the Shell or the window, and the log ------------------------------- */
@@ -250,6 +256,45 @@ static void print_rc(const char *what, int rc, const char *err)
 
 /* ---- settings ------------------------------------------------------------------- */
 
+/* Account n's own settings file: account 1 shares the main prefs file. */
+static void account_prefs(int n, char *out)
+{
+    if (n <= 1)
+        strcpy(out, CFG_PREFS_FILE);
+    else
+        sprintf(out, CFG_DIR "/Account%d.prefs", n);
+}
+
+static void set_token_file(void)
+{
+    if (cfg.account <= 1)
+        strcpy(token_file, CFG_TOKEN_FILE);
+    else
+        sprintf(token_file, CFG_TOKEN_FILE "%d", cfg.account);
+}
+
+/* LOCAL, REMOTE, STATE, NAME of account n into c (the rest of c is left). */
+static void load_account(Config *c, int n)
+{
+    static Config t;
+    static char path[64];
+
+    config_account_clear(c);
+    account_prefs(n, path);
+    if (plat_read_file(path, text, sizeof(text)) < 0)
+        return;
+    if (n > 1) {
+        config_parse(c, text);
+        return;
+    }
+    config_defaults(&t);                /* the main file: only the account's keys */
+    config_parse(&t, text);
+    strcpy(c->local, t.local);
+    strcpy(c->remote, t.remote);
+    strcpy(c->state, t.state);
+    strcpy(c->name, t.name);
+}
+
 static int load_settings(LONG *args, int *changed)
 {
     unsigned int i;
@@ -260,6 +305,15 @@ static int load_settings(LONG *args, int *changed)
         say("Warning: invalid values in %s were ignored\n", (LONG)CFG_PREFS_FILE);
 
     *changed = 0;
+    if (args[ARG_ACCOUNT]) {            /* first: the other arguments are for that account */
+        if (config_set(&cfg, "ACCOUNT", (const char *)args[ARG_ACCOUNT]) != AD_OK) {
+            say("Invalid ACCOUNT=%s (1..%ld)\n", args[ARG_ACCOUNT], (LONG)CFG_ACCOUNTS);
+            return RETURN_ERROR;
+        }
+        *changed = 1;
+    }
+    if (cfg.account > 1)
+        load_account(&cfg, cfg.account);
     for (i = 0; i < sizeof(setting_args) / sizeof(setting_args[0]); i++) {
         const char *v = (const char *)args[setting_args[i].arg];
         if (!v)
@@ -270,19 +324,47 @@ static int load_settings(LONG *args, int *changed)
         }
         *changed = 1;
     }
+    set_token_file();
     return RETURN_OK;
 }
 
+/* The main file gets the common settings (and account 1's), Account<n>.prefs the
+ * active account's own when it is 2 or 3. */
 static int save_settings(void)
 {
-    int n = config_format(&cfg, text, sizeof(text));
+    static Config g;
+    static char path[64];
+    int n, ok;
 
-    if (n < 0 || plat_make_dir(CFG_DIR) != AD_OK ||
-        plat_write_file(CFG_PREFS_FILE, text, n) != AD_OK) {
+    config_defaults(&g);
+    if (plat_read_file(CFG_PREFS_FILE, text, sizeof(text)) >= 0)
+        config_parse(&g, text);
+    strcpy(g.charset, cfg.charset);
+    strcpy(g.upload, cfg.upload);
+    strcpy(g.appicon, cfg.appicon);
+    strcpy(g.clock, cfg.clock);
+    g.interval = cfg.interval;
+    strcpy(g.client_id, cfg.client_id);
+    strcpy(g.tenant, cfg.tenant);
+    g.account = cfg.account;
+    if (cfg.account == 1) {
+        strcpy(g.local, cfg.local);
+        strcpy(g.remote, cfg.remote);
+        strcpy(g.state, cfg.state);
+        strcpy(g.name, cfg.name);
+    }
+    n = config_format(&g, text, sizeof(text));
+    ok = n >= 0 && plat_make_dir(CFG_DIR) == AD_OK && plat_write_file(CFG_PREFS_FILE, text, n) == AD_OK;
+    if (ok && cfg.account > 1) {
+        account_prefs(cfg.account, path);
+        n = config_format_account(&cfg, text, sizeof(text));
+        ok = n >= 0 && plat_write_file(path, text, n) == AD_OK;
+    }
+    if (!ok) {
         say("Cannot save the settings to %s\n", (LONG)CFG_PREFS_FILE);
         return RETURN_ERROR;
     }
-    say("Settings saved to %s\n", (LONG)CFG_PREFS_FILE);
+    note("Settings saved to %s\n", (LONG)CFG_PREFS_FILE);
     return RETURN_OK;
 }
 
@@ -308,7 +390,7 @@ static int show_drive(void)
     int rc, attempt;
 
     for (attempt = 0; attempt < 2; attempt++) {
-        rc = auth_ensure(&login_sess, &a, &tokens, CFG_TOKEN_FILE, attempt > 0, err, sizeof(err));
+        rc = auth_ensure(&login_sess, &a, &tokens, token_file, attempt > 0, err, sizeof(err));
         if (rc != AD_OK) {
             print_rc("Sign-in", rc, err);
             return rc == AD_ERR_AUTH ? RETURN_WARN : RETURN_ERROR;
@@ -322,6 +404,7 @@ static int show_drive(void)
         return RETURN_ERROR;
     }
     say("OneDrive:  %s (%s), ", (LONG)local_text(di.owner), (LONG)di.drive_type);
+    sprintf(cfg.name, "%.40s (%.16s)", local_text(di.owner), di.drive_type);    /* for the menu */
     say("%lu.%lu of %lu.%lu GB used\n",
            di.used_mb / 1000, (di.used_mb % 1000) / 100, di.total_mb / 1000, (di.total_mb % 1000) / 100);
     return RETURN_OK;
@@ -536,18 +619,20 @@ static int cmd_login(void)
         print_rc("Sign-in", rc, err);
         return rc == AD_ERR_BREAK ? RETURN_WARN : RETURN_ERROR;
     }
-    if (plat_make_dir(CFG_DIR) != AD_OK || auth_save(&tokens, CFG_TOKEN_FILE) != AD_OK) {
-        say("Signed in, but cannot save %s\n", (LONG)CFG_TOKEN_FILE);
+    if (plat_make_dir(CFG_DIR) != AD_OK || auth_save(&tokens, token_file) != AD_OK) {
+        say("Signed in, but cannot save %s\n", (LONG)token_file);
         return RETURN_ERROR;
     }
-    say("Signed in. Token saved to %s\n", (LONG)CFG_TOKEN_FILE);
-    return show_drive();
+    say("Signed in. Token saved to %s\n", (LONG)token_file);
+    if ((rc = show_drive()) == RETURN_OK)
+        save_settings();                /* the account's name */
+    return rc;
 }
 
 static int cmd_logout(void)
 {
-    plat_delete_file(CFG_TOKEN_FILE);
-    say("Signed out (%s deleted). Run AmiDrive LOGIN to sign in again.\n", (LONG)CFG_TOKEN_FILE);
+    plat_delete_file(token_file);
+    say("Signed out (%s deleted). Run AmiDrive LOGIN to sign in again.\n", (LONG)token_file);
     return RETURN_OK;
 }
 
@@ -556,6 +641,8 @@ static int cmd_info(void)
     int rc;
 
     say("%s %s\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_VERSION);
+    say("Account:   %ld of %ld%s%s\n", (LONG)cfg.account, (LONG)CFG_ACCOUNTS,
+        (LONG)(cfg.name[0] ? ", " : ""), (LONG)cfg.name);
     say("Local:     %s\n", (LONG)(cfg.local[0] ? cfg.local : "(not set, use LOCAL=)"));
     say("Remote:    %s\n", (LONG)(cfg.remote[0] ? cfg.remote : "(not set, use REMOTE=)"));
     say("Charset:   %s, check every %ld min, %s\n", (LONG)cfg.charset, cfg.interval,
@@ -573,7 +660,7 @@ static int cmd_info(void)
     say("App ID:    %s (%s)\n", (LONG)(cfg.client_id[0] ? cfg.client_id : "not set, use CLIENTID="),
            (LONG)cfg.tenant);
 
-    if (auth_load(&tokens, CFG_TOKEN_FILE) != AD_OK) {
+    if (auth_load(&tokens, token_file) != AD_OK) {
         say("Sign-in:   not signed in, run AmiDrive LOGIN\n");
         return RETURN_WARN;
     }
@@ -627,7 +714,7 @@ static const char *sync_token(void *ud, int force, int *rc, char *err, int errsi
     AuthApp a = app();
 
     (void)ud;
-    *rc = auth_ensure(&login_sess, &a, &tokens, CFG_TOKEN_FILE, force, err, errsize);
+    *rc = auth_ensure(&login_sess, &a, &tokens, token_file, force, err, errsize);
     return *rc == AD_OK ? tokens.access : NULL;
 }
 
@@ -725,6 +812,14 @@ static void show_idle(void)
 
     if (!status_is_open())
         return;
+    if (!signed_in) {
+        status_show("Signed out", "Account > Sign in, or another account", -1);
+        return;
+    }
+    if (!cfg.local[0] || !cfg.remote[0]) {
+        status_show("Not set up", "Account > Sign in sets the folders", -1);
+        return;
+    }
     sprintf(l2, "Last check %s", last_result[0] ? last_result : "-");
     if (paused) {
         strcat(l2, "; Sync now continues");
@@ -826,6 +921,10 @@ static void sync_progress(void *ud, const SyncProgress *p)
         stop_pass = paused = 1;
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
     }
+    if ((r & STATUS_MENU) && (pending = status_menu()) != 0) {
+        stop_pass = 1;                                  /* end this pass, then the menu */
+        Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
+    }
     if (r & STATUS_QUIT)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
 
@@ -918,6 +1017,12 @@ static int wait_next(long secs)
             r = status_handle();
             if (r & STATUS_QUIT)
                 return AD_ERR_BREAK;
+            if ((r & STATUS_MENU) && (pending = status_menu()) != 0)
+                return 2;
+            if ((r & STATUS_SYNC) && (!signed_in || !cfg.local[0] || !cfg.remote[0])) {
+                pending = STATUS_M_SIGNIN;
+                return 2;
+            }
             if (r & STATUS_SYNC) {
                 paused = 0;
                 return AD_OK;
@@ -928,7 +1033,7 @@ static int wait_next(long secs)
                 show_idle();
             }
         }
-        if (!paused && steps-- <= 0)
+        if (!paused && signed_in && cfg.local[0] && cfg.remote[0] && steps-- <= 0)
             return AD_OK;
         Delay(TICKS_PER_SECOND / 5);
     }
@@ -945,27 +1050,213 @@ static void icon_log(const char *msg)
         log_close();
 }
 
-/* Synchronise now (once) or every INTERVAL minutes until Ctrl-C. */
-static int cmd_sync(int once)
-{
-    static char remote[CFG_PATH_SIZE * 2], state_dir[CFG_PATH_SIZE + 16], state_file[CFG_PATH_SIZE + 24];
-    FsCharset cs = cfg.charset[5] == '2' ? FS_LATIN2 : FS_LATIN1;
-    SyncConfig sc;
-    SyncStats ss;
-    char err[200];
-    int rc, fatal;
+/* ---- accounts: sign in / out, the folders of a new account, switching ----------------- */
 
-    if (!instance_claim()) {
-        if (!wbmsg)
-            say("%s is already running (%s STOP stops it)\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_NAME);
-        else if (ask_stop())
-            signal_running(1);
-        return RETURN_WARN;
+static SyncConfig sc;
+static char remote_utf8[CFG_PATH_SIZE * 2], state_dir[CFG_PATH_SIZE + 16], state_file[CFG_PATH_SIZE + 24];
+static int ready;                       /* the active account is signed in and set up */
+static int quit_req;                    /* "Quit" while signing in */
+
+/* plat_sleep's hook while signing in: the window and the icon answer, Stop cancels */
+static void ui_idle(void)
+{
+    int r = status_handle(), a = appicon_poll();
+
+    if ((r & STATUS_QUIT) || (a & APPICON_STOP))
+        quit_req = 1;
+    if ((r & (STATUS_STOP | STATUS_QUIT)) || (a & APPICON_STOP))
+        Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
+    if (a & APPICON_STATUS)
+        status_open();
+    if ((r & STATUS_MENU) && (pending = status_menu()) != 0)
+        Signal(FindTask(NULL), SIGBREAKF_CTRL_C);       /* another choice: stop waiting */
+}
+
+/* The names of the 3 accounts in the menu "Account". */
+static void update_menu(void)
+{
+    static Config t;
+    static char names[CFG_ACCOUNTS][64];
+    const char *p[CFG_ACCOUNTS];
+    int i;
+
+    for (i = 0; i < CFG_ACCOUNTS; i++) {
+        if (i + 1 == cfg.account) {
+            strcpy(names[i], cfg.name[0] ? cfg.name : cfg.local);
+        } else {
+            config_defaults(&t);
+            load_account(&t, i + 1);
+            strcpy(names[i], t.name[0] ? t.name : t.local);
+        }
+        p[i] = names[i];
     }
-    if (fs_to_utf8(cs, cfg.remote, remote, sizeof(remote)) < 0) {
-        say("REMOTE too long\n");
-        return RETURN_ERROR;
+    status_accounts(p, cfg.account, signed_in);
+}
+
+/* The account's name: the owner of its OneDrive (quiet, for the menu). */
+static void drive_name(void)
+{
+    char err[200];
+    const char *tok;
+    DriveInfo di;
+    int rc;
+
+    if ((tok = sync_token(NULL, 0, &rc, err, sizeof(err))) != NULL &&
+        graph_drive_info(&graph_sess, tok, &di, err, sizeof(err)) == AD_OK)
+        sprintf(cfg.name, "%.40s (%.16s)", local_text(di.owner), di.drive_type);
+}
+
+/* Sign in to the active account in the AmiDrive window: the code is shown there, Stop
+ * cancels. Returns 1 when signed in (the token saved). */
+static int login_ui(void)
+{
+    static char l1[100], l2[60];
+    char err[200];
+    AuthApp a = app();
+    int rc;
+
+    if (start_network() != RETURN_OK || !status_open())
+        return 0;
+    status_busy(1);
+    status_show("Signing in ...", "Connecting to Microsoft", -1);
+    rc = auth_device_start(&login_sess, &a, &device, err, sizeof(err));
+    if (rc != AD_OK && clock_retry()) {
+        sess_close(&login_sess);
+        rc = auth_device_start(&login_sess, &a, &device, err, sizeof(err));
     }
+    if (rc != AD_OK) {
+        status_busy(0);
+        status_message(err);
+        return 0;
+    }
+    sprintf(l1, "Open %.80s", strncmp(device.uri, "https://", 8) == 0 ? device.uri + 8 : device.uri);
+    sprintf(l2, "and enter the code %.20s", device.user_code);
+    status_show(l1, l2, -1);
+    print_time();
+    note("Account %ld: sign in at %s\n", (LONG)cfg.account, (LONG)device.uri);
+
+    plat_idle_hook = ui_idle;
+    rc = auth_device_wait(&login_sess, &a, &device, &tokens, err, sizeof(err));
+    plat_idle_hook = NULL;
+    memset(&device, 0, sizeof(device));
+    SetSignal(0, SIGBREAKF_CTRL_C);
+    status_busy(0);
+    if (rc != AD_OK) {
+        if (rc != AD_ERR_BREAK)
+            status_message(err);
+        return 0;
+    }
+    if (plat_make_dir(CFG_DIR) != AD_OK || auth_save(&tokens, token_file) != AD_OK) {
+        status_message("Signed in, but the token could not be saved in ENVARC:AmiDrive");
+        return 0;
+    }
+    drive_name();
+    save_settings();
+    print_time();
+    note("Account %ld signed in: %s\n", (LONG)cfg.account, (LONG)cfg.name);
+    return 1;
+}
+
+static int same_name(const char *a, const char *b)
+{
+    while (*a && (*a | 0x20) == (*b | 0x20)) {
+        a++;
+        b++;
+    }
+    return !*a && !*b;
+}
+
+/* 1 if another account synchronises into dir */
+static int dir_of_other(const char *dir)
+{
+    static Config t;
+    int i;
+
+    for (i = 1; i <= CFG_ACCOUNTS; i++) {
+        if (i == cfg.account)
+            continue;
+        config_defaults(&t);
+        load_account(&t, i);
+        if (t.local[0] && same_name(t.local, dir))
+            return 1;
+    }
+    return 0;
+}
+
+/* The folders of an account that has none yet: a drawer on the Amiga (ASL requester)
+ * and the OneDrive folder (it must exist). Returns 1 when both are set. */
+static int setup_folders(void)
+{
+    static char dir[CFG_PATH_SIZE], rem[CFG_PATH_SIZE], u8[CFG_PATH_SIZE * 2], m[400], t[60];
+    static GraphItem it;
+    FsCharset cs = cfg.charset[5] == '2' ? FS_LATIN2 : FS_LATIN1;
+    const char *tok;
+    char err[200];
+    int rc;
+
+    while (!cfg.local[0]) {
+        sprintf(t, "OneDrive %ld: drawer for its files", (LONG)cfg.account);
+        dir[0] = '\0';
+        if (!status_ask_drawer(t, "Work:", dir, sizeof(dir)))
+            return 0;
+        if (dir_of_other(dir))
+            status_message("Another account uses this drawer.\nChoose (or type) another one.");
+        else if (plat_make_dir(dir) != AD_OK)
+            status_message("This drawer cannot be made.");
+        else
+            config_set(&cfg, "LOCAL", dir);
+    }
+    strcpy(rem, "/Amiga");
+    while (!cfg.remote[0]) {
+        sprintf(t, "OneDrive %ld", (LONG)cfg.account);
+        if (!status_ask_string(t, "Folder in this OneDrive (it must exist):", rem, sizeof(rem)))
+            return 0;
+        if (config_set(&cfg, "REMOTE", rem) != AD_OK || !cfg.remote[0] ||
+            fs_to_utf8(cs, cfg.remote, u8, sizeof(u8)) < 0)
+            continue;
+        if (!(tok = sync_token(NULL, 0, &rc, err, sizeof(err)))) {
+            status_message(err);
+            cfg.remote[0] = '\0';
+            return 0;
+        }
+        rc = graph_item(&graph_sess, tok, u8, &it, err, sizeof(err));
+        if (rc == AD_OK && (it.flags & (GI_FOLDER | GI_ROOT)))
+            break;
+        if (rc == AD_OK || rc == AD_ERR_NOTFOUND)
+            sprintf(m, "There is no folder %.150s in this OneDrive.\n"
+                       "Make it (browser, OneDrive app) or give another one.", rem);
+        else
+            sprintf(m, "Cannot check %.150s:\n%.200s", rem, err);
+        status_message(m);
+        cfg.remote[0] = '\0';
+    }
+    save_settings();
+    return 1;
+}
+
+/* The active account's synchronisation: paths, state, the icon, the menu. */
+static void account_begin(void)
+{
+    FsCharset cs = cfg.charset[5] == '2' ? FS_LATIN2 : FS_LATIN1;
+    char label[16];
+
+    ready = 0;
+    state_free(&state);
+    state_init(&state);
+    last_result[0] = '\0';
+    paused = 0;
+    log_close();
+    log_path[0] = '\0';
+    if (cfg.account > 1)
+        sprintf(label, "OneDrive %ld", (LONG)cfg.account);
+    else
+        strcpy(label, "OneDrive");
+    appicon_set(label, cfg.local);
+    update_menu();
+    if (!signed_in || !cfg.local[0] || !cfg.remote[0] ||
+        fs_to_utf8(cs, cfg.remote, remote_utf8, sizeof(remote_utf8)) < 0)
+        return;
+
     /* STATE=dir, else <LOCAL>/.AmiDrive; in it "state" and the log */
     strcpy(state_dir, cfg.state[0] ? cfg.state : cfg.local);
     if (!cfg.state[0])
@@ -976,23 +1267,78 @@ static int cmd_sync(int once)
     add_name(log_path, LOG_NAME);
     plat_make_dir(cfg.local);
     plat_make_dir(state_dir);
-    log_open();
-    if ((rc = start_network()) != RETURN_OK)
-        return rc;
-    clock_at_start();
 
-    if (auth_load(&tokens, CFG_TOKEN_FILE) != AD_OK) {
-        if (!wbmsg) {
-            say("Not signed in: run %s LOGIN first\n", (LONG)AMIDRIVE_NAME);
-            return RETURN_WARN;
-        }
-        log_close();                    /* started from the icon: sign in now, in the window */
-        if ((rc = cmd_login()) != RETURN_OK)
-            return rc;
-        log_open();
+    sc.local = cfg.local;
+    sc.remote = remote_utf8;
+    sc.state_file = state_file;
+    sc.charset = cs;
+    if (state_load(&state, state_file) == AD_ERR_PROTO)
+        say("Warning: %s is damaged, the whole folder will be read again\n", (LONG)state_file);
+    ready = 1;
+}
+
+/* A choice from the menu "Account" (or Sync now while signed out). */
+static void do_pending(void)
+{
+    int p = pending;
+
+    pending = 0;
+    sess_close(&graph_sess);
+    sess_close(&dl_sess);
+    sess_close(&login_sess);
+    if (p == STATUS_M_SIGNOUT) {
+        plat_delete_file(token_file);
+        memset(&tokens, 0, sizeof(tokens));
+        signed_in = 0;
+        print_time();
+        note("Account %ld signed out (%s deleted)\n", (LONG)cfg.account, (LONG)token_file);
+    } else if (p == STATUS_M_SIGNIN) {
+        if (login_ui())
+            signed_in = 1;
+        if (signed_in && (!cfg.local[0] || !cfg.remote[0]))
+            setup_folders();
+    } else if (p >= 1 && p <= CFG_ACCOUNTS && p != cfg.account) {
+        print_time();
+        note("Switching to account %ld\n", (LONG)p);
+        cfg.account = p;
+        load_account(&cfg, p);
+        set_token_file();
+        save_settings();
+        memset(&tokens, 0, sizeof(tokens));
+        signed_in = auth_load(&tokens, token_file) == AD_OK;
+        update_menu();                  /* the title "OneDrive 2" at once */
+        if (!signed_in && login_ui())
+            signed_in = 1;
+        if (signed_in && (!cfg.local[0] || !cfg.remote[0]))
+            setup_folders();
+    }
+    account_begin();
+    show_idle();
+}
+
+/* Synchronise now (once) or every INTERVAL minutes until Ctrl-C / Quit. */
+static int cmd_sync(int once)
+{
+    SyncStats ss;
+    char err[200];
+    int rc, fatal, w;
+
+    if (!instance_claim()) {
+        if (!wbmsg)
+            say("%s is already running (%s STOP stops it)\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_NAME);
+        else if (ask_stop())
+            signal_running(1);
+        return RETURN_WARN;
     }
     if ((rc = start_network()) != RETURN_OK)
         return rc;
+    clock_at_start();
+    memset(&tokens, 0, sizeof(tokens));
+    signed_in = auth_load(&tokens, token_file) == AD_OK;
+    if (!signed_in && !wbmsg) {
+        say("Not signed in: run %s LOGIN first\n", (LONG)AMIDRIVE_NAME);
+        return RETURN_WARN;
+    }
     if (!once && cfg.appicon[0] == 'Y')
         icon_log(appicon_open("OneDrive", cfg.local, progname, icon_log) ?
                  "Icon \"OneDrive\" added to the Workbench" : "No Workbench icon (Workbench not running?)");
@@ -1000,21 +1346,51 @@ static int cmd_sync(int once)
     memset(&sc, 0, sizeof(sc));
     sc.graph = &graph_sess;
     sc.dl = &dl_sess;
-    sc.local = cfg.local;
-    sc.remote = remote;
-    sc.state_file = state_file;
-    sc.charset = cs;
     sc.tz = plat_timezone();
     sc.upload = cfg.upload[0] == 'Y';
     sc.token = sync_token;
     sc.log = sync_log;
     sc.progress = sync_progress;
 
-    state_init(&state);
-    if (state_load(&state, state_file) == AD_ERR_PROTO)
-        say("Warning: %s is damaged, the whole folder will be read again\n", (LONG)state_file);
+    /* started from the icon: sign in and choose the folders in the window */
+    update_menu();
+    if (wbmsg && !signed_in && login_ui())
+        signed_in = 1;
+    if (wbmsg && signed_in && (!cfg.local[0] || !cfg.remote[0]))
+        setup_folders();
+    account_begin();
+    if (ready && !cfg.name[0]) {        /* signed in before accounts had names */
+        drive_name();
+        if (cfg.name[0]) {
+            save_settings();
+            update_menu();
+        }
+    }
+    rc = AD_OK;
 
     for (;;) {
+        if (quit_req) {
+            rc = AD_ERR_BREAK;
+            break;
+        }
+        if (pending) {
+            do_pending();
+            continue;
+        }
+        if (!ready) {                   /* signed out or not set up: wait for the menu */
+            if (once) {
+                rc = AD_ERR_AUTH;
+                break;
+            }
+            status_open();
+            show_idle();
+            log_close();
+            if (wait_next(0) == AD_ERR_BREAK) {
+                rc = AD_ERR_BREAK;
+                break;
+            }
+            continue;
+        }
         plat_make_dir(cfg.local);
         log_open();
         if (cfg.clock[0] == 'A' && cfg.clock[1] == 'U' && plat_now() - last_clock_check >= 86400UL)
@@ -1031,15 +1407,17 @@ static int cmd_sync(int once)
             stop_pass = 0;
             SetSignal(0, SIGBREAKF_CTRL_C);
         }
-        if (rc == AD_ERR_BREAK && stop_pass) {        /* "Stop": this pass only, then paused */
+        if (rc == AD_ERR_BREAK && stop_pass) {        /* "Stop" or a menu: this pass ends */
             stop_pass = 0;
             SetSignal(0, SIGBREAKF_CTRL_C);
-            note("  Stopped (Stop): paused until Sync now\n");
             sess_close(&graph_sess);
             sess_close(&dl_sess);
             sess_close(&login_sess);
             log_close();
-            if (wait_next(0) != AD_OK)
+            if (pending)                /* the menu choice, at the top of the loop */
+                continue;
+            note("  Stopped (Stop): paused until Sync now\n");
+            if (wait_next(0) == AD_ERR_BREAK)
                 break;                  /* Quit */
             continue;
         }
@@ -1064,6 +1442,12 @@ static int cmd_sync(int once)
                     note("  %ld kept (changed on the Amiga), %ld failed (tried again next time)\n",
                          ss.kept, ss.failed);
             }
+        } else if (rc == AD_ERR_AUTH && appicon_signal()) {
+            /* the sign-in expired or was revoked: wait for Account > Sign in */
+            print_rc("  Stopped", rc, err);
+            signed_in = 0;
+            account_begin();
+            continue;
         } else if (fatal) {             /* these end the program: always shown (Ctrl-C below) */
             if (rc != AD_ERR_BREAK)
                 print_rc("  Stopped", rc, err);
@@ -1076,10 +1460,11 @@ static int cmd_sync(int once)
         if (once)
             break;
         log_close();                    /* readable while waiting */
-        if (wait_next(cfg.interval * 60) != AD_OK) {
+        if ((w = wait_next(cfg.interval * 60)) == AD_ERR_BREAK) {
             rc = AD_ERR_BREAK;
             break;
         }
+        rc = AD_OK;                     /* time is up, Sync now, or a menu choice (2) */
     }
     appicon_close();
     status_close();
@@ -1093,7 +1478,7 @@ static int cmd_sync(int once)
     }
     if (rc != AD_OK)
         return RETURN_ERROR;
-    return ss.failed ? RETURN_WARN : RETURN_OK;
+    return RETURN_OK;
 }
 
 /* AmiDrive STOP: Ctrl-C to the running synchronisation, wait until it has ended */
@@ -1431,7 +1816,7 @@ int main(int argc, char **argv)
         rc = cmd_logout();
     } else if (args[ARG_INFO]) {
         rc = cmd_info();
-    } else if (!cfg.local[0] || !cfg.remote[0]) {
+    } else if (!wbmsg && (!cfg.local[0] || !cfg.remote[0])) {
         if (wbmsg)
             say("Set the folders first: Tool Types LOCAL=<Amiga directory> and\n"
                 "REMOTE=<OneDrive folder> in the icon (Icons > Information...)\n");

@@ -169,6 +169,25 @@ void appicon_busy(int busy)
     }
 }
 
+/* Another account: its directory and label ("OneDrive 2"); the icon is added again
+ * when the label changes (its place is kept). */
+void appicon_set(const char *label, const char *local)
+{
+    BPTR lock;
+
+    strncpy(local_dir, local, sizeof(local_dir) - 1);
+    local_full[0] = '\0';
+    if (local[0] && (lock = Lock((STRPTR)local, ACCESS_READ)) != 0) {
+        NameFromLock(lock, (STRPTR)local_full, sizeof(local_full));
+        UnLock(lock);
+    }
+    if (!icon || strcmp(label, icon_label) == 0)
+        return;
+    strncpy(icon_label, label, sizeof(icon_label) - 1);
+    RemoveAppIcon(icon);
+    icon = AddAppIconA(0, 0, (STRPTR)icon_label, port, 0, dob, icon_tags);
+}
+
 ULONG appicon_signal(void)
 {
     return icon ? 1UL << port->mp_SigBit : 0;

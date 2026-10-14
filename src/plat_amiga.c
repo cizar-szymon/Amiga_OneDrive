@@ -63,12 +63,16 @@ int plat_break(void)
     return (SetSignal(0, SIGBREAKF_CTRL_C) & SIGBREAKF_CTRL_C) != 0;
 }
 
+void (*plat_idle_hook)(void);
+
 int plat_sleep(long secs)
 {
     /* in steps of 1/5 s so Ctrl-C answers quickly */
     long steps = secs * 5;
 
     while (steps-- > 0) {
+        if (plat_idle_hook)
+            plat_idle_hook();           /* the window and the icon answer meanwhile */
         if (plat_break())
             return AD_ERR_BREAK;
         Delay(TICKS_PER_SECOND / 5);

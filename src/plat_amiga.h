@@ -14,6 +14,10 @@ const Tz *plat_timezone(void);
 /* Local time now, seconds since 1978-01-01 (DateStamp). */
 unsigned long plat_local_now(void);
 
+/* Called about 5 times a second while plat_sleep waits (sign-in, retries): the user
+ * interface answers meanwhile. NULL = nothing. */
+extern void (*plat_idle_hook)(void);
+
 /* Longest file name on the volume of path: 30 for OFS/FFS, 107 for FFS2, SFS, PFS. */
 int plat_name_limit(const char *path);
 

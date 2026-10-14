@@ -90,6 +90,8 @@ int main(void)
             if (args[3]) {                          /* right button: menus */
                 button(IECODE_RBUTTON);
                 Delay(10);
+                move_to(tx, 4);                     /* over the menu title first */
+                Delay(10);
                 move_to(tx, ty);
                 Delay(args[7] ? *(LONG *)args[7] * 50 : 5);
                 button(IECODE_RBUTTON | IECODE_UP_PREFIX);

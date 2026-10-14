@@ -22,6 +22,9 @@
 int appicon_open(const char *label, const char *local, const char *progname,
                  void (*log)(const char *msg));
 
+/* Another account: its directory and the icon's label. */
+void appicon_set(const char *label, const char *local);
+
 /* 1: the "synchronising" image, 0: the normal one. */
 void appicon_busy(int busy);
 
