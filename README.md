@@ -28,9 +28,9 @@ Technika: C (vbcc), `bsdsocket.library` (Roadshow), AmiSSL 5 (OpenSSL 3), własn
 z keep-alive, parser JSON jsmn, Microsoft Graph API (`/delta`, pobieranie, wysyłanie w sesjach).
 Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawem testów.
 
-**Stan (wersja 0.2.0):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
+**Stan (wersja 0.3.0):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
 (OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
-start z ikony.
+start z ikony, autostart z `WBStartup`, ikona „OneDrive” na pulpicie Workbencha.
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
 i instalacji dla użytkownika: [docs/AmiDrive-opis.pdf](docs/AmiDrive-opis.pdf) (`tools/make_doc_pdf.py`).
 
@@ -51,6 +51,7 @@ AmiDrive LOCAL=Work:OneDrive REMOTE=/Amiga [CHARSET=LATIN2] [INTERVAL=3] [UPLOAD
 AmiDrive                              praca w tle: synchronizacja co INTERVAL minut, Ctrl-C kończy
 AmiDrive ONCE                         jedno przejście
 AmiDrive STOP                         zatrzymuje AmiDrive działający w tle (czeka na koniec)
+AmiDrive APPICON=NO                   bez ikony „OneDrive” na pulpicie (domyślnie YES)
 AmiDrive TEST                         sprawdza zegar, strefę czasową, DNS, TLS i HTTP
 AmiDrive TEST HOST=badssl.com         to samo dla innego serwera (sprawdzanie certyfikatów)
 ```
@@ -63,8 +64,17 @@ Ustawienia: `ENVARC:AmiDrive/AmiDrive.prefs` (podane w Shellu są zapisywane), t
 `INTERVAL=`…, wyłączone w nawiasach), mają pierwszeństwo przed plikiem ustawień, ale nie są
 zapisywane. AmiDrive pracuje w tle bez okna; okno pojawia się tylko przy błędzie albo logowaniu
 (pierwszy start bez logowania od razu pokazuje kod), a z Tool Type `WINDOW` pokazuje też postęp.
-Ponowne kliknięcie ikony pyta, czy zatrzymać. Ikona w `WBStartup` (ma `DONOTWAIT`) uruchamia
-AmiDrive przy starcie systemu.
+Ponowne kliknięcie ikony pyta, czy zatrzymać.
+
+**Ikona „OneDrive” na pulpicie (AppIcon):** dopóki AmiDrive pracuje w tle, na pulpicie
+Workbencha jest ikona „OneDrive”. Dwuklik otwiera synchronizowany katalog (OS 3.5+), pliki
+i szuflady upuszczone na ikonę są kopiowane do niego (`C:Copy ALL CLONE`) i od razu wysyłane,
+a menu *Narzędzia* ma pozycje „AmiDrive: synchronise now” i „AmiDrive: stop”.
+
+**Autostart:** ikona projektu `SYS:WBStartup/AmiDrive.info` (z plikiem `AmiDrive` obok) ma
+narzędzie domyślne `Work:AmiDrive/AmiDrive` i `DONOTWAIT` – Workbench uruchamia przy starcie
+program z `Work:AmiDrive`, więc w `WBStartup` nie ma drugiej kopii programu. Wyłączenie: usunąć
+oba pliki z `SYS:WBStartup`. Ikonę tworzy `tools/make_icon.py --project Work:AmiDrive/AmiDrive`.
 Opcje `CLIENTID=` i `TENANT=` (`common`, `consumers`, `organizations`) wskazują aplikację w Microsoft
 Entra ID, przez którą AmiDrive się loguje.
 
@@ -107,6 +117,7 @@ python tools/amiga_remote.py run "Work:AmiDrive/AmiDriveTests"
 | Plik | Zawartość |
 |---|---|
 | `src/main.c` | argumenty (`ReadArgs`, Tool Types), polecenia, pętla synchronizacji, dziennik |
+| `src/appicon_amiga.c` | ikona „OneDrive” na pulpicie (AppIcon), upuszczanie plików, menu Narzędzia |
 | `src/net_amiga.c` | gniazda Roadshow + AmiSSL, weryfikacja certyfikatu |
 | `src/plat_amiga.c` | czas, strefa z `TZ` / Locale, czekanie z Ctrl-C, bezpieczny zapis plików |
 | `src/auth.c` | logowanie kodem urządzenia, odświeżanie i zapis tokenu (przenośny) |

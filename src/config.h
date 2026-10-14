@@ -19,6 +19,7 @@ typedef struct {
     char state[CFG_PATH_SIZE];          /* "" = <local>/.AmiDrive */
     char charset[8];                    /* LATIN1 | LATIN2 */
     char upload[4];                     /* YES: changes on the Amiga are sent | NO */
+    char appicon[4];                    /* YES: "OneDrive" icon on the Workbench while running | NO */
     long interval;                      /* minutes */
     char client_id[48];
     char tenant[40];

@@ -28,6 +28,23 @@ void test_config(void)
     }
     CHECK_INT(config_set(&c, "UPLOAD", "YES"), AD_OK);
 
+    /* APPICON: YES by default, YES/NO only, survives format -> parse */
+    CHECK_STR(c.appicon, "YES");
+    CHECK_INT(config_set(&c, "appicon", "No"), AD_OK);
+    CHECK_STR(c.appicon, "NO");
+    CHECK_STR(c.upload, "YES");
+    CHECK_INT(config_set(&c, "APPICON", "1"), AD_ERR_PROTO);
+    {
+        char t[1024];
+        Config u;
+        CHECK(config_format(&c, t, sizeof(t)) > 0);
+        CHECK(strstr(t, "APPICON=NO\n") != NULL);
+        config_defaults(&u);
+        CHECK_INT(config_parse(&u, t), AD_OK);
+        CHECK_STR(u.appicon, "NO");
+    }
+    CHECK_INT(config_set(&c, "APPICON", "YES"), AD_OK);
+
     /* kv_get: case, spaces, comments, '=' in the value */
     CHECK_INT(kv_get("# c\n  Key = x \nkey=a=b \r\n", "KEY", v, sizeof(v)), 1);
     CHECK_STR(v, "x");

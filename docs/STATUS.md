@@ -27,6 +27,8 @@
 | `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki, usuwanie, zmiana nazwy, podfolder, 3 poziomy folderów, przeniesienia plików i folderów, zmiana nazwy folderu, nazwa > 30 znaków, przeniesienie poza folder) |
 | `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
 | `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ A1200: `ONCE` i praca w tle (`INTERVAL=1`, zmiany wykryte w kolejnych cyklach, Ctrl-C w czasie czekania) |
+| Ikona „OneDrive” na pulpicie (AppIcon): dwuklik otwiera katalog, upuszczone pliki kopiowane i wysyłane, menu Narzędzia „synchronise now” / „stop”, `APPICON=YES\|NO` | ✅ A1200: ikona dodawana i zdejmowana; ⏳ dwuklik, upuszczanie, menu (wymaga myszy) |
+| Autostart: ikona projektu `SystemSD:WBStartup/AmiDrive.info` + plik `AmiDrive` (narzędzie domyślne `Work:AmiDrive/AmiDrive`, `DONOTWAIT`) | ✅ A1200: otwarcie ikony uruchamia AmiDrive w tle; ⏳ prawdziwy restart |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
@@ -200,6 +202,16 @@
   Shell: druga kopia kończy się z komunikatem, `STOP` wysyła Ctrl-C do właściciela portu i czeka
   do 60 s; Workbench: pytanie o zatrzymanie. Wada: proces zawieszony po awarii trzyma port do
   restartu.
+- **AppIcon (14.10.2026, użytkownik):** ikona „OneDrive” na pulpicie zamiast `Assign` (Workbench
+  nie pokazuje przypisań). Tylko w pracy w tle (nie `ONCE`), obrazek z ikony programu
+  (`PROGDIR:<nazwa>.info`), położenie wybiera Workbench. Upuszczone pliki/szuflady kopiuje
+  `C:Copy ALL CLONE` (synchronicznie, między przejściami), potem od razu przejście; obiekty
+  z wnętrza `LOCAL` i całe woluminy są odrzucane. Czekanie między przejściami co 1/5 s
+  sprawdza Ctrl-C i komunikaty ikony.
+- **Autostart (14.10.2026):** w `SYS:WBStartup` tylko ikona projektu z narzędziem domyślnym
+  `Work:AmiDrive/AmiDrive` (bez drugiej kopii programu; aktualizacja w `Work:AmiDrive`
+  wystarcza). Plik `AmiDrive` obok ikony to krótki tekst (ikona projektu potrzebuje pliku).
+  Sieć startuje wcześniej (`S:User-Startup` → `S:Network-Startup`).
 - **Dziennik:** `<stan>/AmiDrive.log`, otwierany na czas przejścia (między przejściami można go
   czytać), po 64 KB przenoszony do `AmiDrive.log.old`.
 - Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.

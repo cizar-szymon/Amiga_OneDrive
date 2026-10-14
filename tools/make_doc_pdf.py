@@ -101,7 +101,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Arial", 8)
     canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.2.0 – opis działania i instalacji")
+    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.0 – opis działania i instalacji")
     canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
     canvas.restoreState()
 
@@ -114,7 +114,7 @@ def content():
                  colWidths=[30 * mm, 140 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     s += [head, Spacer(1, 4),
-          P("Wersja programu 0.2.0, dokument z 14.10.2026.", small), Spacer(1, 6)]
+          P("Wersja programu 0.3.0, dokument z 14.10.2026.", small), Spacer(1, 6)]
 
     # ---------------------------------------------------------------- 1
     s.append(P("1. Czym jest AmiDrive", h1))
@@ -186,6 +186,9 @@ def content():
         ["Co", "Gdzie / wartość"],
         ["Program i ikona", "<font name='Consolas'>Work:AmiDrive/AmiDrive</font>, "
                             "<font name='Consolas'>Work:AmiDrive/AmiDrive.info</font>"],
+        ["Autostart", "<font name='Consolas'>SystemSD:WBStartup/AmiDrive.info</font> (ikona projektu: "
+                      "narzędzie domyślne <font name='Consolas'>Work:AmiDrive/AmiDrive</font>, "
+                      "DONOTWAIT) i krótki plik tekstowy <font name='Consolas'>SystemSD:WBStartup/AmiDrive</font>"],
         ["Synchronizowany folder w chmurze", "<font name='Consolas'>/Retro/AmigaDrive</font>"],
         ["Katalog na Amidze", "<font name='Consolas'>Work:OneDrive</font>"],
         ["Ustawienia", "<font name='Consolas'>ENVARC:AmiDrive/AmiDrive.prefs</font>: LOCAL, REMOTE, "
@@ -197,29 +200,40 @@ def content():
     ], [52 * mm, 118 * mm]))
     s.append(Spacer(1, 6))
     s.append(P("Sposób uruchomienia", h2))
-    s.append(P("AmiDrive został uruchomiony <b>z ikony</b> (tak jak dwukrotne kliknięcie na Workbenchu; "
-               "zdalnie przez AmiAgent i pomocniczy program <font name='Consolas'>WBRun</font>). "
-               "Tool Types ikony są wyłączone (w nawiasach), więc program bierze ustawienia z pliku "
-               "prefs. Pracuje <b>w tle, bez okna</b>: co 3 minuty robi przejście, a jego przebieg "
-               "zapisuje tylko do dziennika. Okno pojawia się wyłącznie przy błędzie albo logowaniu."))
-    s.append(P("<b>Uwaga:</b> ikona nie leży w <font name='Consolas'>SYS:WBStartup</font>, więc po "
-               "restarcie Amigi AmiDrive <b>nie startuje sam</b> – trzeba kliknąć ikonę albo dodać "
-               "autostart (niżej)."))
+    s.append(P("AmiDrive <b>startuje sam razem z Workbenchem</b>: w "
+               "<font name='Consolas'>SystemSD:WBStartup</font> leży ikona projektu, która uruchamia "
+               "program z <font name='Consolas'>Work:AmiDrive</font> (bez drugiej kopii programu – "
+               "nowa wersja w <font name='Consolas'>Work:AmiDrive</font> od razu działa też przy "
+               "autostarcie). Sieć jest już wtedy uruchomiona (<font name='Consolas'>S:User-Startup</font>). "
+               "Tool Types ikony programu są wyłączone (w nawiasach), więc ustawienia pochodzą z pliku "
+               "prefs. Program pracuje <b>w tle, bez okna</b>: co 3 minuty robi przejście i zapisuje "
+               "je do dziennika. Okno pojawia się tylko przy błędzie albo logowaniu."))
+    s.append(P("Ikona „OneDrive” na pulpicie", h2))
+    s.append(P("Dopóki AmiDrive pracuje w tle, na pulpicie Workbencha jest ikona <b>OneDrive</b> "
+               "(chmurka):"))
+    s += bullets([
+        "<b>dwuklik</b> otwiera synchronizowany katalog <font name='Consolas'>Work:OneDrive</font> "
+        "(AmigaOS 3.5 lub nowszy);",
+        "<b>pliki i szuflady upuszczone na ikonę</b> są kopiowane do tego katalogu i od razu "
+        "wysyłane do chmury;",
+        "menu <i>Narzędzia</i>: <b>AmiDrive: synchronise now</b> (przejście teraz) i "
+        "<b>AmiDrive: stop</b> (koniec pracy w tle, ikona znika).",
+    ])
+    s.append(P("Workbench sam wybiera miejsce ikony (pierwsze wolne w kolumnie ikon – może być "
+               "zasłonięte oknem). Bez ikony: <font name='Consolas'>APPICON=NO</font>."))
     s.append(P("Obsługa na co dzień", h2))
     s.append(table([
         ["Czynność", "Jak"],
         ["Uruchomić w tle", "Dwuklik na ikonie <i>AmiDrive</i> albo w Shellu: "
                             "<font name='Consolas'>Run &gt;NIL: Work:AmiDrive/AmiDrive</font>"],
-        ["Zatrzymać", "Ponowny dwuklik na ikonie → <i>Stop</i>, albo w Shellu "
-                      "<font name='Consolas'>Work:AmiDrive/AmiDrive STOP</font>"],
-        ["Jedno przejście teraz", "<font name='Consolas'>Work:AmiDrive/AmiDrive ONCE</font> "
-                                  "(gdy nie działa w tle)"],
+        ["Zatrzymać", "Menu <i>Narzędzia → AmiDrive: stop</i>, ponowny dwuklik na ikonie programu → "
+                      "<i>Stop</i>, albo w Shellu <font name='Consolas'>Work:AmiDrive/AmiDrive STOP</font>"],
+        ["Jedno przejście teraz", "Menu <i>Narzędzia → AmiDrive: synchronise now</i> (gdy działa w tle), "
+                                  "albo <font name='Consolas'>Work:AmiDrive/AmiDrive ONCE</font>"],
         ["Co się działo", "<font name='Consolas'>Type Work:OneDrive/.AmiDrive/AmiDrive.log</font>"],
         ["Stan konta i ustawień", "<font name='Consolas'>Work:AmiDrive/AmiDrive INFO</font>"],
-        ["Start razem z systemem", "Skopiować ikonę i program do "
-                                   "<font name='Consolas'>SYS:WBStartup</font> (ikona ma DONOTWAIT) "
-                                   "albo dopisać do <font name='Consolas'>S:User-Startup</font>: "
-                                   "<font name='Consolas'>Run &gt;NIL: Work:AmiDrive/AmiDrive</font>"],
+        ["Wyłączyć autostart", "Usunąć <font name='Consolas'>SystemSD:WBStartup/AmiDrive</font> i "
+                               "<font name='Consolas'>AmiDrive.info</font> z tego katalogu"],
     ], [42 * mm, 128 * mm]))
     s.append(Spacer(1, 4))
     s.append(P("Naraz może działać tylko jedna synchronizacja: druga kopia uruchomiona z Shella "
@@ -262,8 +276,10 @@ def content():
     s.append(P("To pierwsze przejście pobierze zawartość folderu. Zamiast Shella można wpisać te same "
                "opcje w Tool Types ikony (<i>Ikony → Informacje…</i>, usunąć nawiasy).", body))
     s += [Paragraph(t, bullet, bulletText=f"{i}.") for i, t in enumerate([
-        "<b>Praca w tle.</b> Kliknij ikonę albo <font name='Consolas'>Run &gt;NIL: AmiDrive</font>; "
-        "autostart jak w rozdziale 3.",
+        "<b>Praca w tle i autostart.</b> Kliknij ikonę albo <font name='Consolas'>Run &gt;NIL: AmiDrive</font>. "
+        "Autostart: skopiuj program z ikoną do <font name='Consolas'>SYS:WBStartup</font> (ikona ma "
+        "DONOTWAIT) albo – jak na A1200 – połóż tam ikonę projektu z narzędziem domyślnym "
+        "wskazującym program (<font name='Consolas'>tools/make_icon.py --project</font>).",
     ], 6)]
     s.append(P("Konto prywatne a firmowe – rejestracja aplikacji", h2))
     s.append(P("AmiDrive loguje się przez aplikację zarejestrowaną w Microsoft Entra ID (identyfikator "
@@ -312,6 +328,7 @@ def content():
         ["STATE=katalog", "inne miejsce bazy stanu i dziennika (domyślnie LOCAL/.AmiDrive)"],
         ["ONCE", "jedno przejście i koniec"],
         ["WINDOW", "(z ikony) okno z bieżącym postępem"],
+        ["APPICON=YES|NO", "ikona „OneDrive” na pulpicie w pracy w tle (domyślnie YES)"],
         ["STOP", "zatrzymuje AmiDrive działający w tle"],
         ["LOGIN / LOGOUT / INFO", "logowanie, wylogowanie, stan konta i ustawień"],
         ["TEST", "sprawdza zegar, strefę, DNS, TLS i połączenie z Microsoft Graph"],

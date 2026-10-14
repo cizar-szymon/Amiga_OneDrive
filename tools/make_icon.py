@@ -4,6 +4,8 @@
   python tools/make_icon.py build/amiga/AmiDrive.info [--preview icon.png]
                             [--tooltypes "LOCAL=Work:OneDrive" "(WINDOW)" ...]
   python tools/make_icon.py OUT.info --frame picture.png --crop X Y W H    (from a picture)
+  python tools/make_icon.py WBStartup.info --project Work:AmiDrive/AmiDrive --tooltypes DONOTWAIT
+      a project icon for SYS:WBStartup that starts the program (no second copy of it)
 
 The icon has a classic 4 colour image (any Workbench) and an OS 3.5+ ColorIcon (FORM ICON
 with FACE and IMAG chunks, RLE compressed), which AmigaOS 3.2 shows. Stack 65536 bytes
@@ -121,17 +123,23 @@ def draw(w=46, h=34):
     return img
 
 
-def disk_object(rgb, w, h, types):
+def disk_object(rgb, w, h, types, default_tool=None):
+    """a tool icon, or with default_tool a project icon that starts that program"""
     gadget = struct.pack(">IhhhhHHHIIIIIHI", 0, 0, 0, w, h + 1, 0x0004, 0x0003, 0x0001,
                          1, 0, 0, 0, 0, 0, 1)
     head = struct.pack(">HH", 0xE310, 1) + gadget + struct.pack(
-        ">BBIIiiIII", 3, 0, 0, 1 if types else 0, -0x80000000, -0x80000000, 0, 0, STACK)
+        ">BBIIiiIII", 4 if default_tool else 3, 0, 1 if default_tool else 0, 1 if types else 0,
+        -0x80000000, -0x80000000, 0, 0, STACK)
     image = struct.pack(">hhhhhIBBI", 0, 0, w, h, 2, 1, 3, 0, 0) + planar(rgb, w, h)
+    tool = b""
+    if default_tool:
+        b = default_tool.encode("latin-1") + b"\0"
+        tool = struct.pack(">I", len(b)) + b
     colors = sorted(set(rgb))
     if len(colors) > 256:
         raise SystemExit("more than 256 colours")
     remap = {c: i for i, c in enumerate(colors)}
-    return head + image + (tool_types(types) if types else b"") + \
+    return head + image + tool + (tool_types(types) if types else b"") + \
         color_icon([remap[c] for c in rgb], w, h, colors)
 
 
@@ -142,6 +150,8 @@ def main():
     ap.add_argument("--crop", nargs=4, type=int, metavar=("X", "Y", "W", "H"))
     ap.add_argument("--preview")
     ap.add_argument("--tooltypes", nargs="*", default=[])
+    ap.add_argument("--project", metavar="PROGRAM",
+                    help="project icon that starts PROGRAM (e.g. in SYS:WBStartup)")
     args = ap.parse_args()
     if args.frame:
         x, y, w, h = args.crop
@@ -150,7 +160,7 @@ def main():
         img = draw()
         w, h = img.size
     rgb = list(img.getdata())
-    open(args.out, "wb").write(disk_object(rgb, w, h, args.tooltypes))
+    open(args.out, "wb").write(disk_object(rgb, w, h, args.tooltypes, args.project))
     if args.preview:
         img.resize((w * 6, h * 6), Image.NEAREST).save(args.preview)
     print(f"{args.out}: {w}x{h}, {len(set(rgb))} colours, tool types {args.tooltypes}")

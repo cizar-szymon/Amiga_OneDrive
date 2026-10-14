@@ -3,6 +3,7 @@
  *   AmiDrive [LOCAL=Work:OneDrive] [REMOTE=/Amiga] [ONCE] [CHARSET=LATIN1|LATIN2]
  *            [UPLOAD=YES|NO]                 YES: also send the changes made on the Amiga
  *            [INTERVAL=3] [STATE=dir]       synchronise (settings are remembered)
+ *            [APPICON=YES|NO]               YES: "OneDrive" icon on the Workbench in the background
  *   AmiDrive LOGIN          sign in with a device code
  *   AmiDrive LOGOUT         forget the sign-in (deletes the token file)
  *   AmiDrive INFO           settings, sign-in state, OneDrive owner and space
@@ -21,6 +22,9 @@
  *
  * Only one synchronisation runs at a time (public port "AmiDrive"). Each pass is also
  * written to <state>/AmiDrive.log (AmiDrive.log.old after 64 KB).
+ *
+ * In the background (not ONCE) the "OneDrive" AppIcon (appicon_amiga.c) opens the
+ * directory, takes files dropped on it and adds "synchronise now" / "stop" to Tools.
  */
 #include <stdarg.h>
 #include <string.h>
@@ -41,6 +45,7 @@
 #include <proto/intuition.h>
 
 #include "amidrive.h"
+#include "appicon_amiga.h"
 #include "auth.h"
 #include "config.h"
 #include "fsmap.h"
@@ -57,9 +62,10 @@ size_t __stack = 65536;                 /* OpenSSL needs more than the Shell def
 const char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDRIVE_DATE ")";
 
 #define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
-                 "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S"
+                 "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K"
 enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
-       ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_WINDOW, ARG_STOP, ARG_COUNT };
+       ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_WINDOW, ARG_STOP, ARG_APPICON,
+       ARG_COUNT };
 
 /* the output window when started from Workbench: opens on the first output */
 #define WB_WINDOW "CON:40/30/600/180/" AMIDRIVE_NAME "/AUTO/CLOSE/WAIT"
@@ -71,7 +77,7 @@ enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, A
 static const struct { int arg; const char *key; } setting_args[] = {
     { ARG_LOCAL, "LOCAL" }, { ARG_REMOTE, "REMOTE" }, { ARG_CHARSET, "CHARSET" }, { ARG_UPLOAD, "UPLOAD" },
     { ARG_INTERVAL, "INTERVAL" }, { ARG_STATE, "STATE" }, { ARG_CLIENTID, "CLIENTID" },
-    { ARG_TENANT, "TENANT" }
+    { ARG_TENANT, "TENANT" }, { ARG_APPICON, "APPICON" }
 };
 
 struct LocaleBase *LocaleBase;
@@ -89,6 +95,7 @@ static int quiet;                       /* from Workbench without WINDOW: progre
 static BPTR logfh;                      /* the log, open during a pass */
 static char log_path[CFG_PATH_SIZE + 32];
 static struct MsgPort *instance;        /* our public port while synchronising */
+static char progname[108];              /* our program file (image of the AppIcon) */
 
 /* ---- output: the Shell or the window, and the log ------------------------------- */
 
@@ -359,6 +366,7 @@ static int cmd_info(void)
     say("Remote:    %s\n", (LONG)(cfg.remote[0] ? cfg.remote : "(not set, use REMOTE=)"));
     say("Charset:   %s, check every %ld min, %s\n", (LONG)cfg.charset, cfg.interval,
            (LONG)(cfg.upload[0] == 'Y' ? "both ways" : "download only (UPLOAD=NO)"));
+    say("AppIcon:   %s\n", (LONG)(cfg.appicon[0] == 'Y' ? "\"OneDrive\" on the Workbench" : "no (APPICON=NO)"));
     if (cfg.state[0])
         say("State:     %s\n", (LONG)cfg.state);
     else if (cfg.local[0])
@@ -450,6 +458,41 @@ static void print_time(void)
     note("%s ", (LONG)iso);
 }
 
+/* Wait secs between passes. AD_OK: time is up or "synchronise now" (AppIcon menu or
+ * files dropped on it); AD_ERR_BREAK: Ctrl-C or "stop". */
+static int wait_next(long secs)
+{
+    ULONG sig = appicon_signal();
+    long steps = secs * 5;              /* 1/5 s steps, like plat_sleep */
+    int r;
+
+    for (;;) {
+        if (plat_break())
+            return AD_ERR_BREAK;
+        if (sig && (SetSignal(0, sig) & sig)) {
+            r = appicon_handle();
+            if (r & APPICON_STOP)
+                return AD_ERR_BREAK;
+            if (r & APPICON_SYNC)
+                return AD_OK;
+        }
+        if (steps-- <= 0)
+            return AD_OK;
+        Delay(TICKS_PER_SECOND / 5);
+    }
+}
+
+static void icon_log(const char *msg)
+{
+    int was_open = logfh != 0;
+
+    log_open();
+    print_time();
+    note("%s\n", (LONG)msg);
+    if (!was_open)
+        log_close();
+}
+
 /* Synchronise now (once) or every INTERVAL minutes until Ctrl-C. */
 static int cmd_sync(int once)
 {
@@ -495,6 +538,9 @@ static int cmd_sync(int once)
     }
     if ((rc = start_network()) != RETURN_OK)
         return rc;
+    if (!once && cfg.appicon[0] == 'Y')
+        icon_log(appicon_open("OneDrive", cfg.local, progname, icon_log) ?
+                 "Icon \"OneDrive\" added to the Workbench" : "No Workbench icon (Workbench not running?)");
 
     memset(&sc, 0, sizeof(sc));
     sc.graph = &graph_sess;
@@ -550,17 +596,18 @@ static int cmd_sync(int once)
         if (once)
             break;
         log_close();                    /* readable while waiting */
-        if (plat_sleep(cfg.interval * 60) != AD_OK) {
+        if (wait_next(cfg.interval * 60) != AD_OK) {
             rc = AD_ERR_BREAK;
             break;
         }
     }
+    appicon_close();
     if (rc == AD_ERR_AUTH)
         say("Sign in again: %s LOGIN\n", (LONG)AMIDRIVE_NAME);
     if (rc == AD_ERR_BREAK) {
         log_open();
         print_time();
-        note("Stopped (Ctrl-C)\n");
+        note("Stopped\n");
         return RETURN_WARN;
     }
     if (rc != AD_OK)
@@ -790,6 +837,7 @@ int main(int argc, char **argv)
     memset(args, 0, sizeof(args));
     if (argc == 0) {                    /* Workbench: output to a window, Tool Types */
         wbmsg = (struct WBStartup *)argv;
+        strncpy(progname, (const char *)wbmsg->sm_ArgList[0].wa_Name, sizeof(progname) - 1);
         if ((win = Open((STRPTR)WB_WINDOW, MODE_NEWFILE)) != 0)
             oldout = SelectOutput(win);
         rda = wb_args(args);
@@ -797,6 +845,8 @@ int main(int argc, char **argv)
     } else if (!(rda = ReadArgs((STRPTR)TEMPLATE, args, NULL))) {
         PrintFault(IoErr(), (STRPTR)AMIDRIVE_NAME);
         return RETURN_FAIL;
+    } else {
+        GetProgramName((STRPTR)progname, sizeof(progname));
     }
     LocaleBase = (struct LocaleBase *)OpenLibrary("locale.library", 38);
     plat_init_timezone(tzsrc, sizeof(tzsrc));
@@ -838,6 +888,7 @@ int main(int argc, char **argv)
 
     if (plat_break())
         note("*** Break\n");
+    appicon_close();
     log_close();
     instance_release();
     sess_close(&login_sess);
