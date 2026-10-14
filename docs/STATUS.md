@@ -30,6 +30,7 @@
 | Ikona „OneDrive” na pulpicie (AppIcon): dwuklik otwiera katalog, upuszczone pliki kopiowane i wysyłane, menu Narzędzia „synchronise now” / „stop”, `APPICON=YES\|NO` | ✅ A1200: ikona dodawana i zdejmowana; ⏳ dwuklik, upuszczanie, menu (wymaga myszy) |
 | Autostart: ikona projektu `SystemSD:WBStartup/AmiDrive.info` + plik `AmiDrive` (narzędzie domyślne `Work:AmiDrive/AmiDrive`, `DONOTWAIT`) | ✅ A1200: otwarcie ikony uruchamia AmiDrive w tle; restart (`C:Reboot`, 14.10.2026): AmiDrive wystartował sam, ikona „OneDrive” na pulpicie, przejście „no changes” |
 | Instalator (`install/Install-AmiDrive`, Installer 47) i paczka `releases/amiga/AmiDrive-0.3.0.lha` (`tools/make_release.py --lha`) | ✅ A1200: aktualizacja na prawdziwo (EN), nowa instalacja w trybie symulacji (PL) |
+| Zegar Amigi: czas z nagłówka `Date` serwera Graph (TLS z weryfikacją łańcucha i nazwy, bez dat), okno „Set clock / Always set automatically / Cancel”, `CLOCK=ASK\|AUTO\|NO`, `SETCLOCK`, pytanie w instalatorze (0.3.1) | ✅ testy + A1200 |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
@@ -99,6 +100,15 @@
     komunikat na początku (z ikony katalogiem bieżącym jest szuflada paczki);
   - czcionka Workbencha na A1200 nie ma części liter Latin-2 (krzaki także w tekstach
     samego Installera) – sprawa czcionki systemu, nie skryptu.
+- A1200, zegar (14.10.2026, 0.3.1; zgłoszenie: na innej Amidze logowanie kończyło się
+  „certificate rejected: certificate is not yet valid” – zły zegar):
+  - `SETCLOCK` przy dobrym zegarze: różnica 3 s, ustawione razem z zegarem z baterią;
+  - `Date 14-Oct-25` + `ONCE` (CLOCK=ASK): okno przy starcie (zegar przed datą wydania),
+    „365 days behind”, „Set clock” → zegar dobry, przejście „no changes”;
+  - `Date 14-Oct-30` + `ONCE`: odrzucony certyfikat („certificate has expired”, z podpowiedzią
+    o zegarze) → okno „1460 days ahead” → „Always set automatically” → zegar dobry,
+    `CLOCK=AUTO` w prefs, ponowione przejście bez błędu;
+  - CLOCK=AUTO, zegar +1 h: ustawiony bez okna, wpis w dzienniku.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
@@ -226,6 +236,14 @@
   `Work:AmiDrive/AmiDrive` (bez drugiej kopii programu; aktualizacja w `Work:AmiDrive`
   wystarcza). Plik `AmiDrive` obok ikony to krótki tekst (ikona projektu potrzebuje pliku).
   Sieć startuje wcześniej (`S:User-Startup` → `S:Network-Startup`).
+- **Zegar (14.10.2026, użytkownik):** czas z internetu przez HTTPS do `graph.microsoft.com`
+  z `X509_V_FLAG_NO_CHECK_TIME` – łańcuch certyfikatów i nazwa serwera sprawdzane jak zawsze,
+  pomijane tylko daty (przy złym zegarze nie da się ich sprawdzić); na tym połączeniu nie idzie
+  token. NTP odrzucone: bez uwierzytelnienia i bywa blokowane. Dokładność ok. 1 s.
+  ASK pokazuje okno, gdy zegar jest przed datą wydania programu albo certyfikat odrzucono za
+  daty; AUTO ustawia przy starcie i co 24 h (różnica ≥ 2 s); ustawiany jest zegar systemu
+  (`TR_SETSYSTIME`) i zegar z baterią (`WriteBattClock`). „Always set automatically” zapisuje
+  w prefs tylko `CLOCK=AUTO` (nie Tool Types ani argumenty tego uruchomienia).
 - **Dziennik:** `<stan>/AmiDrive.log`, otwierany na czas przejścia (między przejściami można go
   czytać), po 64 KB przenoszony do `AmiDrive.log.old`.
 - Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.

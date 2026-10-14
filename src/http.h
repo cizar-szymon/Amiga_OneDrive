@@ -26,6 +26,7 @@ typedef struct {
     int  status;                   /* e.g. 200, 302, 429 */
     int  keep_alive;               /* connection may be reused after the body */
     long retry_after;              /* seconds from Retry-After, -1 = none */
+    unsigned long date;            /* Date header, UTC seconds since 1978; 0 = none */
     char location[HTTP_LOCATION_SIZE];
     char content_type[64];
 

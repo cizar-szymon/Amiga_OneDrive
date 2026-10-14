@@ -1,4 +1,4 @@
-AmiDrive 0.3.0 - klient OneDrive dla AmigaOS 3.x
+AmiDrive 0.3.1 - klient OneDrive dla AmigaOS 3.x
 ================================================
 
 AmiDrive synchronizuje JEDEN wybrany folder z OneDrive z szufladą na dysku
@@ -13,7 +13,7 @@ Wymagania
   kilka MB Fast RAM,
 - stos TCP/IP z bsdsocket.library (Roadshow, AmiTCP, Miami) i internet,
 - AmiSSL 5.24 lub nowszy (Aminet: util/libs/AmiSSL-5.x),
-- poprawny zegar Amigi (inaczej połączenia szyfrowane się nie udadzą),
+- poprawny zegar Amigi - AmiDrive może go ustawić sam (opcja CLOCK),
 - konto Microsoft z OneDrive (prywatne albo firmowe / szkolne).
 
 
@@ -29,7 +29,8 @@ Instalacja
      utwórz go w przeglądarce lub aplikacji OneDrive),
    - polskie litery w nazwach (Latin-2), co ile minut sprawdzać zmiany,
      w obie strony czy tylko pobieranie, ikona "OneDrive" na pulpicie,
-   - strefa czasowa (zmienna TZ z czasem letnim) i autostart.
+   - zegar Amigi (ustawiać automatycznie z internetu / pytać / nie
+     sprawdzać), strefa czasowa (zmienna TZ z czasem letnim) i autostart.
 4. Na koniec AmiDrive może się od razu uruchomić. Przy pierwszym starcie
    pokaże w oknie kod: otwórz na telefonie lub PC
    https://login.microsoft.com/device, wpisz kod, zaloguj się i zgódź na
@@ -56,6 +57,7 @@ W Shellu:
   AmiDrive INFO              ustawienia, logowanie, zajętość OneDrive
   AmiDrive LOGIN / LOGOUT    logowanie / usunięcie tokenu
   AmiDrive TEST              zegar, strefa, DNS, TLS, połączenie
+  AmiDrive SETCLOCK          ustawia zegar Amigi (i zegar z baterią) z internetu
 
 Dziennik: <szuflada z plikami>/.AmiDrive/AmiDrive.log
 
@@ -68,6 +70,7 @@ Opcje (Shell i Tool Types ikony programu)
   INTERVAL=min           co ile minut sprawdzać (domyślnie 3)
   UPLOAD=YES|NO          NO: tylko pobieranie z chmury
   APPICON=YES|NO         ikona "OneDrive" na pulpicie
+  CLOCK=ASK|AUTO|NO      zły zegar: okno z pytaniem / ustaw sam / nic
   STATE=szuflada         inne miejsce stanu i dziennika
   WINDOW                 (z ikony) okno z bieżącym postępem
   CLIENTID= TENANT=      własna rejestracja aplikacji (patrz niżej)
@@ -87,6 +90,22 @@ Jak działa
 - Gdy brakuje większości plików (np. odłączony dysk), nic nie jest usuwane.
 - Nazwy dłuższe niż pozwala dysk (OFS/FFS: 30 znaków) są skracane do
   "początek~hhhhhh.ext"; bity ochrony i komentarze nie są przenoszone.
+
+
+Zegar Amigi
+-----------
+Połączenia szyfrowane wymagają dobrej daty: przy złym zegarze certyfikaty
+serwerów wyglądają na "jeszcze nieważne" albo "wygasłe" i logowanie się nie
+udaje. AmiDrive bierze wtedy czas z serwera Microsoftu (sprawdzonego
+certyfikatem; pomijane są tylko jego daty) i:
+  CLOCK=ASK   (domyślnie) pokazuje okno z czasem Amigi i czasem z internetu
+              i przyciskami "Set clock" (ustaw), "Always set automatically"
+              (ustaw i od teraz CLOCK=AUTO) i "Cancel",
+  CLOCK=AUTO  ustawia zegar sam: przy starcie i raz na dobę,
+  CLOCK=NO    nic nie sprawdza.
+Ustawiany jest zegar systemu i zegar z baterią (jak SetClock SAVE). Amiga bez
+zegara z baterią: CLOCK=AUTO albo "AmiDrive SETCLOCK" w S:User-Startup po
+uruchomieniu sieci.
 
 
 Konto firmowe innej organizacji

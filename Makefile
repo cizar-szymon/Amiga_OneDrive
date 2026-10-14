@@ -23,7 +23,7 @@ CFLAGS := +aos68k_win -c99 -cpu=68020 -O3 -I$(AMISSL) -I$(NETINC) -I$(NDK)
 
 OUT  := build/amiga/AmiDrive
 OBJ  := build/amiga/obj
-SRCS := main.c net_amiga.c plat_amiga.c appicon_amiga.c http.c json.c fsmap.c tz.c session.c config.c auth.c \
+SRCS := main.c net_amiga.c plat_amiga.c appicon_amiga.c clock_amiga.c http.c json.c fsmap.c tz.c session.c config.c auth.c \
         graph.c state.c sync.c
 OBJS := $(addprefix $(OBJ)/,$(SRCS:.c=.o))
 HDRS := $(wildcard src/*.h)

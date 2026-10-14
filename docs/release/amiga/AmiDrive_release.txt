@@ -5,6 +5,15 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.3.1 (14.10.2026)
+------------------
+- Zły zegar Amigi: okno z czasem Amigi i czasem z internetu i przyciskiem
+  do ustawienia zegara (także zegara z baterią); opcja CLOCK=ASK|AUTO|NO
+  (AUTO: zegar ustawiany sam przy starcie i raz na dobę), polecenie
+  AmiDrive SETCLOCK, pytanie o zegar w instalatorze.
+- Komunikat o odrzuconym certyfikacie podpowiada sprawdzenie zegara.
+- Kolorowe ikony w stylu GlowIcons, osobna ikona instalatora.
+
 0.3.0 (14.10.2026)
 ------------------
 - Instalator (Install-AmiDrive): wybór miejsca programu i plików, folderu

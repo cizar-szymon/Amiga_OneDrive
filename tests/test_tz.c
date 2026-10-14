@@ -46,6 +46,22 @@ void test_tz(void)
     CHECK_INT(tz_parse_iso8601("1977-12-31T23:59:59Z", &t), AD_ERR_TOOBIG);
     CHECK_INT(tz_parse_iso8601("1978-01-01T00:30:00+01:00", &t), AD_ERR_TOOBIG);
     CHECK_INT(tz_parse_iso8601("2023-02-29T12:00:00Z", &t), AD_ERR_PROTO);
+
+    /* HTTP Date header (clock from the Internet) */
+    {
+        unsigned long h;
+        CHECK_INT(tz_parse_http_date("Wed, 14 Oct 2026 10:15:39 GMT", &h), AD_OK);
+        CHECK_INT((long)h, iso("2026-10-14T10:15:39Z"));
+        CHECK_INT(tz_parse_http_date("Sun, 01 Jan 1978 00:00:00 GMT", &h), AD_OK);
+        CHECK_INT((long)h, 0);
+        CHECK_INT(tz_parse_http_date("Thu, 29 Feb 2024 23:59:59 GMT", &h), AD_OK);
+        CHECK_INT((long)h, iso("2024-02-29T23:59:59Z"));
+        CHECK_INT(tz_parse_http_date("Wed, 14 Oct 2026 10:15:39 UTC", &h), AD_ERR_PROTO);
+        CHECK_INT(tz_parse_http_date("Wed, 14 Okt 2026 10:15:39 GMT", &h), AD_ERR_PROTO);
+        CHECK_INT(tz_parse_http_date("Wednesday, 14-Oct-26 10:15:39 GMT", &h), AD_ERR_PROTO);
+        CHECK_INT(tz_parse_http_date("Fri, 30 Feb 2026 10:15:39 GMT", &h), AD_ERR_PROTO);
+        CHECK_INT(tz_parse_http_date("Wed, 14 Oct 1977 10:15:39 GMT", &h), AD_ERR_TOOBIG);
+    }
     CHECK_INT(tz_parse_iso8601("2026-10-13 20:07:32Z", &t), AD_ERR_PROTO);
     CHECK_INT(tz_parse_iso8601("2026-10-13T20:07:32", &t), AD_ERR_PROTO);
     CHECK_INT(tz_parse_iso8601("2026-10-13T20:07:32Zjunk", &t), AD_ERR_PROTO);

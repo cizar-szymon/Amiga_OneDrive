@@ -3,6 +3,7 @@
 
 #include "amidrive.h"
 #include "http.h"
+#include "tz.h"
 
 #define LINE_SIZE (HTTP_LOCATION_SIZE + 64)
 
@@ -222,6 +223,9 @@ static void header(Http *h, int cut, unsigned long *content_length, int *have_le
         unsigned long secs;
         if (parse_ulong(skip_spaces(line + 12), &secs))
             h->retry_after = (long)secs;   /* HTTP-date form is not used by Graph */
+    } else if (starts_with_ci(line, "Date:")) {
+        if (tz_parse_http_date(skip_spaces(line + 5), &h->date) != AD_OK)
+            h->date = 0;                    /* the time to set the Amiga clock from */
     } else if (starts_with_ci(line, "Content-Type:")) {
         copy_str(h->content_type, (int)sizeof(h->content_type), skip_spaces(line + 13));
     }
@@ -235,6 +239,7 @@ int http_read_response(Http *h)
 
         h->status = 0;
         h->retry_after = -1;
+        h->date = 0;
         h->location[0] = '\0';
         h->content_type[0] = '\0';
         h->chunked = 0;

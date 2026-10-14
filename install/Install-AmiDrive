@@ -10,7 +10,7 @@
 ; the settings are saved by AmiDrive itself (ENVARC:AmiDrive/AmiDrive.prefs).
 
 (set #pl (= @language "polski"))
-(set #version "0.3.0")
+(set #version "0.3.1")
 
 (if (< (/ @installer-version 65536) 43)
   (abort "Installer 43 or newer is needed (AmigaOS 3.1.4 / 3.2 / 3.9)."))
@@ -192,11 +192,28 @@
         (choices (if #pl "Tak" "Yes") (if #pl "Nie" "No"))
         (default 1)))
 
+    (set #clock
+      (askchoice
+        (prompt (if #pl "Zegar Amigi:" "The Amiga clock:"))
+        (help (if #pl (cat "Połączenia szyfrowane wymagają dobrej daty i godziny. AmiDrive może brać czas "
+                           "z serwera Microsoftu (sprawdzonego certyfikatem) i ustawiać zegar systemu oraz "
+                           "zegar z baterią: sam przy starcie i raz na dobę, albo po pytaniu w okienku, "
+                           "gdy zegar jest zły.")
+                      (cat "Encrypted connections need a correct date and time. AmiDrive can take the time "
+                           "from the Microsoft server (verified by its certificate) and set the system "
+                           "clock and the battery clock: by itself at the start and once a day, or after "
+                           "asking in a window when the clock is wrong.")))
+        (choices (if #pl "Ustawiaj automatycznie z internetu (zalecane)" "Set it from the Internet automatically (recommended)")
+                 (if #pl "Pytaj w okienku, gdy zegar jest zły" "Ask in a window when it is wrong")
+                 (if #pl "Nie sprawdzaj" "Do not check"))
+        (default 0)))
+
     ; AmiDrive saves the settings it is given; STOP only stops a running copy (none now)
     (working (if #pl "Zapisywanie ustawień..." "Saving the settings..."))
     (run (cat "\"" #prog "\" LOCAL=\"" #local "\" REMOTE=\"" #remote "\" CHARSET=" #charset
               " INTERVAL=" #interval " UPLOAD=" (if (= #up 0) "YES" "NO")
-              " APPICON=" (if #appicon "YES" "NO") " STOP >NIL:"))
+              " APPICON=" (if #appicon "YES" "NO")
+              " CLOCK=" (select #clock "AUTO" "ASK" "NO") " STOP >NIL:"))
   ))
 
 (complete 60)

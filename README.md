@@ -28,7 +28,7 @@ Technika: C (vbcc), `bsdsocket.library` (Roadshow), AmiSSL 5 (OpenSSL 3), własn
 z keep-alive, parser JSON jsmn, Microsoft Graph API (`/delta`, pobieranie, wysyłanie w sesjach).
 Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawem testów.
 
-**Stan (wersja 0.3.0):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
+**Stan (wersja 0.3.1):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
 (OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
 start z ikony, autostart z `WBStartup`, ikona „OneDrive” na pulpicie Workbencha.
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
@@ -64,6 +64,8 @@ AmiDrive                              praca w tle: synchronizacja co INTERVAL mi
 AmiDrive ONCE                         jedno przejście
 AmiDrive STOP                         zatrzymuje AmiDrive działający w tle (czeka na koniec)
 AmiDrive APPICON=NO                   bez ikony „OneDrive” na pulpicie (domyślnie YES)
+AmiDrive CLOCK=ASK|AUTO|NO            zły zegar: okno z pytaniem / ustaw sam / nic (domyślnie ASK)
+AmiDrive SETCLOCK                     ustawia zegar Amigi (i zegar z baterią) z internetu
 AmiDrive TEST                         sprawdza zegar, strefę czasową, DNS, TLS i HTTP
 AmiDrive TEST HOST=badssl.com         to samo dla innego serwera (sprawdzanie certyfikatów)
 ```
@@ -129,6 +131,7 @@ python tools/amiga_remote.py run "Work:AmiDrive/AmiDriveTests"
 | Plik | Zawartość |
 |---|---|
 | `src/main.c` | argumenty (`ReadArgs`, Tool Types), polecenia, pętla synchronizacji, dziennik |
+| `src/clock_amiga.c` | czas z serwera (HTTPS, certyfikat bez dat), ustawienie zegara i zegara z baterią |
 | `src/appicon_amiga.c` | ikona „OneDrive” na pulpicie (AppIcon), upuszczanie plików, menu Narzędzia |
 | `src/net_amiga.c` | gniazda Roadshow + AmiSSL, weryfikacja certyfikatu |
 | `src/plat_amiga.c` | czas, strefa z `TZ` / Locale, czekanie z Ctrl-C, bezpieczny zapis plików |

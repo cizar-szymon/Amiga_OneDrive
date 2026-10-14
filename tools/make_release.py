@@ -51,8 +51,8 @@ def build(ver):
     name = f"AmiDrive-{ver}"
     top = os.path.join(ROOT, "build", "release")
     out = os.path.join(top, name)
-    if os.path.isdir(out):
-        shutil.rmtree(out)
+    if os.path.isdir(top):              # only this version goes into the archive
+        shutil.rmtree(top)
     os.makedirs(os.path.join(out, "Docs"))
     os.makedirs(os.path.join(out, "WBStartup"))
 

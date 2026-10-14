@@ -5,6 +5,15 @@ Reporting bugs: give the version (in a Shell: Version AmiDrive) and attach
 the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
 
 
+0.3.1 (14.10.2026)
+------------------
+- Wrong Amiga clock: a window with the Amiga time and the Internet time and
+  a button to set the clock (also the battery clock); option
+  CLOCK=ASK|AUTO|NO (AUTO: set by itself at the start and once a day),
+  command AmiDrive SETCLOCK, a clock question in the installer.
+- The message about a rejected certificate suggests checking the clock.
+- Colour icons in the GlowIcons style, a separate installer icon.
+
 0.3.0 (14.10.2026)
 ------------------
 - Installer (Install-AmiDrive): where to put the program and the files, the

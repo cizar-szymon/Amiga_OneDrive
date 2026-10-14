@@ -41,6 +41,10 @@ unsigned long tz_to_utc(const Tz *tz, unsigned long local);
  * Returns AD_OK, AD_ERR_PROTO (bad syntax) or AD_ERR_TOOBIG (outside 1978..2114). */
 int tz_parse_iso8601(const char *s, unsigned long *utc);
 
+/* HTTP Date header "Wed, 14 Oct 2026 10:15:39 GMT" -> UTC seconds. Returns AD_OK,
+ * AD_ERR_PROTO or AD_ERR_TOOBIG. */
+int tz_parse_http_date(const char *s, unsigned long *utc);
+
 /* UTC seconds -> "YYYY-MM-DDTHH:MM:SSZ" (out needs 21 bytes). */
 void tz_format_iso8601(unsigned long utc, char *out);
 

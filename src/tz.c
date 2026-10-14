@@ -113,6 +113,34 @@ static void two(char *o, long v)
     o[1] = (char)('0' + v % 10);
 }
 
+int tz_parse_http_date(const char *s, unsigned long *utc)
+{
+    static const char months[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    char iso[24];
+    int m;
+
+    /* "Wed, 14 Oct 2026 10:15:39 GMT" (IMF-fixdate, the only form servers send now) */
+    if (strlen(s) < 29 || s[3] != ',' || s[4] != ' ' || s[7] != ' ' || s[11] != ' ' ||
+        s[16] != ' ' || strncmp(s + 25, " GMT", 4) != 0)
+        return AD_ERR_PROTO;
+    for (m = 0; m < 12; m++)
+        if (strncmp(s + 8, months + m * 3, 3) == 0)
+            break;
+    if (m == 12)
+        return AD_ERR_PROTO;
+    memcpy(iso, s + 12, 4);                             /* year */
+    iso[4] = '-';
+    iso[5] = (char)('0' + (m + 1) / 10);
+    iso[6] = (char)('0' + (m + 1) % 10);
+    iso[7] = '-';
+    memcpy(iso + 8, s + 5, 2);                          /* day */
+    iso[10] = 'T';
+    memcpy(iso + 11, s + 17, 8);                        /* hh:mm:ss */
+    iso[19] = 'Z';
+    iso[20] = '\0';
+    return tz_parse_iso8601(iso, utc);
+}
+
 void tz_format_iso8601(unsigned long utc, char *out)
 {
     long days = (long)(utc / DAY), tod = (long)(utc % DAY), y;

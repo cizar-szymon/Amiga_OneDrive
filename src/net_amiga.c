@@ -29,6 +29,7 @@
 struct Library *SocketBase, *AmiSSLMasterBase, *AmiSSLBase, *AmiSSLExtBase;
 
 static SSL_CTX *ctx;
+int net_cert_time_error, net_ignore_cert_time;
 static int amissl_open;
 
 struct NetConn {
@@ -142,6 +143,7 @@ NetConn *net_connect(const char *host, int port, long timeout_secs, char *err, i
         return NULL;
     }
     c->sock = -1;
+    net_cert_time_error = 0;
 
     if (!(he = gethostbyname((STRPTR)host))) {
         set_err(err, errsize, "cannot resolve host name", host);
@@ -173,10 +175,17 @@ NetConn *net_connect(const char *host, int port, long timeout_secs, char *err, i
     SSL_set_fd(c->ssl, (int)c->sock);
     SSL_set_tlsext_host_name(c->ssl, (char *)host);    /* SNI */
     SSL_set1_host(c->ssl, host);                       /* certificate must match */
+    if (net_ignore_cert_time)                           /* clock_amiga.c only */
+        X509_VERIFY_PARAM_set_flags(SSL_get0_param(c->ssl), X509_V_FLAG_NO_CHECK_TIME);
 
     if ((rc = SSL_connect(c->ssl)) != 1) {
         long vr = SSL_get_verify_result(c->ssl);
-        if (vr != X509_V_OK)
+        if (vr == X509_V_ERR_CERT_NOT_YET_VALID || vr == X509_V_ERR_CERT_HAS_EXPIRED) {
+            /* nearly always the Amiga clock (or very old AmiSSL certificates) */
+            net_cert_time_error = 1;
+            set_err(err, errsize, "certificate rejected, check the Amiga clock (Date)",
+                    X509_verify_cert_error_string(vr));
+        } else if (vr != X509_V_OK)
             set_err(err, errsize, "certificate rejected", X509_verify_cert_error_string(vr));
         else
             set_err(err, errsize, "TLS handshake failed", ssl_error());

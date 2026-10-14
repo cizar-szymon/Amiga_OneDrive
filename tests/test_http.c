@@ -1,5 +1,6 @@
 #include "amidrive.h"
 #include "http.h"
+#include "tz.h"
 #include "tests.h"
 
 static Http h;
@@ -82,6 +83,22 @@ void test_http(void)
     CHECK_INT(http_read_response(&h), AD_OK);
     CHECK_INT(h.status, 429);
     CHECK_INT(h.retry_after, 30);
+    CHECK_INT((long)h.date, 0);                     /* no Date header */
+    CHECK_INT(http_skip_body(&h), AD_OK);
+
+    /* Date header: the time for the Amiga clock; a bad one is ignored */
+    http_init(&h, fake_conn("HTTP/1.1 200 OK\r\ndate: Wed, 14 Oct 2026 10:15:39 GMT\r\n"
+                            "Content-Length: 0\r\n\r\n"
+                            "HTTP/1.1 200 OK\r\nDate: yesterday\r\nContent-Length: 0\r\n\r\n", 7));
+    CHECK_INT(http_read_response(&h), AD_OK);
+    {
+        unsigned long want;
+        tz_parse_iso8601("2026-10-14T10:15:39Z", &want);
+        CHECK_INT((long)h.date, (long)want);
+    }
+    CHECK_INT(http_skip_body(&h), AD_OK);
+    CHECK_INT(http_read_response(&h), AD_OK);
+    CHECK_INT((long)h.date, 0);
     CHECK_INT(http_skip_body(&h), AD_OK);
 
     /* 100 Continue is skipped */

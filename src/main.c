@@ -10,6 +10,8 @@
  *   AmiDrive TEST           check clock, time zone, DNS, TLS and HTTP against Graph
  *   AmiDrive TEST HOST=x    TLS + "GET /" to another host (e.g. expired.badssl.com)
  *   AmiDrive STOP           stop the AmiDrive running in the background (waits for it)
+ *   AmiDrive SETCLOCK       set the Amiga clock (and battery clock) from the Internet
+ *            [CLOCK=ASK|AUTO|NO]            wrong clock: window / set it / nothing
  *
  * Settings: Shell arguments > Tool Types of the icon > the prefs file
  * (ENVARC:AmiDrive/AmiDrive.prefs). Only Shell arguments are saved.
@@ -27,6 +29,7 @@
  * directory, takes files dropped on it and adds "synchronise now" / "stop" to Tools.
  */
 #include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <exec/types.h>
@@ -46,6 +49,7 @@
 
 #include "amidrive.h"
 #include "appicon_amiga.h"
+#include "clock_amiga.h"
 #include "auth.h"
 #include "config.h"
 #include "fsmap.h"
@@ -62,10 +66,10 @@ size_t __stack = 65536;                 /* OpenSSL needs more than the Shell def
 const char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDRIVE_DATE ")";
 
 #define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
-                 "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K"
+                 "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K,CLOCK/K,SETCLOCK/S"
 enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
        ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_WINDOW, ARG_STOP, ARG_APPICON,
-       ARG_COUNT };
+       ARG_CLOCK, ARG_SETCLOCK, ARG_COUNT };
 
 /* the output window when started from Workbench: opens on the first output */
 #define WB_WINDOW "CON:40/30/600/180/" AMIDRIVE_NAME "/AUTO/CLOSE/WAIT"
@@ -77,7 +81,7 @@ enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, A
 static const struct { int arg; const char *key; } setting_args[] = {
     { ARG_LOCAL, "LOCAL" }, { ARG_REMOTE, "REMOTE" }, { ARG_CHARSET, "CHARSET" }, { ARG_UPLOAD, "UPLOAD" },
     { ARG_INTERVAL, "INTERVAL" }, { ARG_STATE, "STATE" }, { ARG_CLIENTID, "CLIENTID" },
-    { ARG_TENANT, "TENANT" }, { ARG_APPICON, "APPICON" }
+    { ARG_TENANT, "TENANT" }, { ARG_APPICON, "APPICON" }, { ARG_CLOCK, "CLOCK" }
 };
 
 struct LocaleBase *LocaleBase;
@@ -319,6 +323,181 @@ static int show_drive(void)
 
 /* ---- commands ------------------------------------------------------------------- */
 
+/* ---- the clock (CLOCK=ASK|AUTO|NO, SETCLOCK) ------------------------------------ */
+
+static unsigned long last_clock_check;  /* UTC of the last check (AUTO: every 24 h) */
+
+/* local seconds -> "Wed 14-Oct-2026 12:20:05" (out: 32 bytes) */
+static void format_local(unsigned long t, char *out)
+{
+    static const char wd[] = "SunMonTueWedThuFriSat", mo[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    unsigned long days = t / 86400UL, tod = t % 86400UL;
+    long y;
+    int m, d;
+
+    tz_civil_from_days((long)days, &y, &m, &d);
+    sprintf(out, "%.3s %02d-%.3s-%ld %02lu:%02lu:%02lu", wd + (days % 7) * 3, d, mo + (m - 1) * 3,
+            y, tod / 3600, tod / 60 % 60, tod % 60);        /* 1978-01-01 was a Sunday */
+}
+
+/* Change one key of the prefs file only (not the Tool Types or arguments of this run). */
+static void save_one_setting(const char *key, const char *value)
+{
+    static Config c;
+    int n;
+
+    config_defaults(&c);
+    if (plat_read_file(CFG_PREFS_FILE, text, sizeof(text)) >= 0)
+        config_parse(&c, text);
+    if (config_set(&c, key, value) == AD_OK && (n = config_format(&c, text, sizeof(text))) > 0 &&
+        plat_make_dir(CFG_DIR) == AD_OK)
+        plat_write_file(CFG_PREFS_FILE, text, n);
+}
+
+/* diff (> 0: the Amiga is behind) -> "365 days behind", "1 h 0 min ahead", "3 min 5 s behind" */
+static void format_offset(long diff, char *out)
+{
+    long a = diff < 0 ? -diff : diff;
+    const char *dir = diff > 0 ? "behind" : "ahead";
+
+    if (a >= 2 * 86400L)
+        sprintf(out, "%ld days %s", a / 86400L, dir);
+    else if (a >= 3600)
+        sprintf(out, "%ld h %ld min %s", a / 3600, a / 60 % 60, dir);
+    else
+        sprintf(out, "%ld min %ld s %s", a / 60, a % 60, dir);
+}
+
+/* The window: 1 = set the clock, 2 = set it and from now on automatically, 0 = no */
+static int ask_set_clock(const char *amiga, const char *net, long diff)
+{
+    struct IntuitionBase *IntuitionBase = (struct IntuitionBase *)OpenLibrary((STRPTR)"intuition.library", 36);
+    struct EasyStruct es;
+    static char off[48];
+    ULONG args[4];
+    LONG r;
+
+    if (!IntuitionBase)
+        return 0;
+    format_offset(diff, off);
+    args[0] = (ULONG)amiga;
+    args[1] = (ULONG)net;
+    args[2] = (ULONG)off;
+    args[3] = (ULONG)AD_GRAPH_HOST;
+    es.es_StructSize = sizeof(es);
+    es.es_Flags = 0;
+    es.es_Title = (STRPTR)AMIDRIVE_NAME ": the clock is wrong";
+    es.es_TextFormat = (STRPTR)
+        "The Amiga clock is wrong, so secure connections to\n"
+        "OneDrive fail (certificates seem not valid yet / expired)\n"
+        "and file dates are wrong.\n\n"
+        "Amiga clock:     %s\n"
+        "Internet time:   %s\n"
+        "The Amiga clock is %s.\n"
+        "(time of %s, verified server)\n\n"
+        "Set the Amiga clock (also the battery clock) now?";
+    es.es_GadgetFormat = (STRPTR)"Set clock|Always set automatically|Cancel";
+    r = EasyRequestArgs(NULL, &es, NULL, args);
+    CloseLibrary((struct Library *)IntuitionBase);
+    return (int)r;
+}
+
+/* Compare the clock with the Internet time and fix it. ask: show the window first (only
+ * when more than 2 minutes off, or always with force: a certificate was rejected for its
+ * dates); else set it without asking when 2 s or more off. Returns 1 if it was set. */
+static int check_clock(int ask, int force)
+{
+    char err[200], a[32], n[32];
+    unsigned long utc, before;
+    long diff;
+    int r, battery;
+
+    if (start_network() != RETURN_OK)
+        return 0;
+    last_clock_check = plat_now();
+    if (clock_internet(AD_GRAPH_HOST, &utc, err, sizeof(err)) != AD_OK) {
+        (force ? say : note)("Clock: no time from the Internet (%s)\n", (LONG)err);
+        return 0;
+    }
+    before = plat_now();
+    diff = (long)(utc - before);            /* > 0: the Amiga is behind */
+    if (diff > -2 && diff < 2)
+        return 0;
+    if (ask) {
+        if (!force && diff > -120 && diff < 120)
+            return 0;                       /* a little drift: not worth a window */
+        format_local(plat_local_now(), a);
+        format_local(tz_to_local(plat_timezone(), utc), n);
+        r = ask_set_clock(a, n, diff);
+        if (r == 0) {
+            note("Clock: not changed (Amiga %s, Internet %s)\n", (LONG)a, (LONG)n);
+            return 0;
+        }
+        if (r == 2) {
+            strcpy(cfg.clock, "AUTO");
+            save_one_setting("CLOCK", "AUTO");
+        }
+        utc += plat_now() - before;         /* the time the window was open */
+    }
+    if (clock_set_local(tz_to_local(plat_timezone(), utc), &battery) != AD_OK) {
+        say("Clock: cannot set the time (timer.device)\n");
+        return 0;
+    }
+    format_local(plat_local_now(), n);
+    format_offset(diff, a);
+    note("Clock set from the Internet to %s (it was %s)%s\n", (LONG)n, (LONG)a,
+         (LONG)(battery ? "" : ", no battery clock"));
+    return 1;
+}
+
+/* At the start: AUTO checks always, ASK only when the clock is before this release
+ * (certainly wrong; other errors show up as rejected certificates, see clock_retry). */
+static void clock_at_start(void)
+{
+    unsigned long release = (unsigned long)tz_days_from_civil(AMIDRIVE_YEAR, AMIDRIVE_MONTH, AMIDRIVE_DAY) * 86400UL;
+
+    if (last_clock_check)               /* once per run (sign-in, then synchronisation) */
+        return;
+    if (cfg.clock[0] == 'A' && cfg.clock[1] == 'U')
+        check_clock(0, 0);
+    else if (cfg.clock[0] == 'A' && plat_now() < release)
+        check_clock(1, 1);
+}
+
+/* After a failed request: if a certificate was rejected for its dates, offer / do the
+ * clock fix (not with CLOCK=NO). Returns 1 if the clock was set: try again. */
+static int clock_retry(void)
+{
+    if (!net_cert_time_error || cfg.clock[0] == 'N')
+        return 0;
+    net_cert_time_error = 0;
+    return check_clock(cfg.clock[1] != 'U', 1);
+}
+
+/* AmiDrive SETCLOCK: set the clock from the Internet now (no window). */
+static int cmd_setclock(void)
+{
+    char err[200], a[32], n[32];
+    unsigned long utc;
+    int rc, battery;
+
+    if ((rc = start_network()) != RETURN_OK)
+        return rc;
+    if (clock_internet(AD_GRAPH_HOST, &utc, err, sizeof(err)) != AD_OK) {
+        say("No time from the Internet: %s\n", (LONG)err);
+        return RETURN_ERROR;
+    }
+    format_local(plat_local_now(), a);
+    format_local(tz_to_local(plat_timezone(), utc), n);
+    say("Amiga clock:    %s\nInternet time:  %s (%s)\n", (LONG)a, (LONG)n, (LONG)AD_GRAPH_HOST);
+    if (clock_set_local(tz_to_local(plat_timezone(), utc), &battery) != AD_OK) {
+        say("Cannot set the time (timer.device)\n");
+        return RETURN_ERROR;
+    }
+    say("Clock set%s\n", (LONG)(battery ? " (also the battery clock)" : " (no battery clock found)"));
+    return RETURN_OK;
+}
+
 static int cmd_login(void)
 {
     char err[200];
@@ -327,8 +506,13 @@ static int cmd_login(void)
 
     if ((rc = start_network()) != RETURN_OK)
         return rc;
+    clock_at_start();
     say("Signing in to Microsoft (%s) ...\n", (LONG)cfg.tenant);
-    if ((rc = auth_device_start(&login_sess, &a, &device, err, sizeof(err))) != AD_OK) {
+    if ((rc = auth_device_start(&login_sess, &a, &device, err, sizeof(err))) != AD_OK && clock_retry()) {
+        sess_close(&login_sess);
+        rc = auth_device_start(&login_sess, &a, &device, err, sizeof(err));
+    }
+    if (rc != AD_OK) {
         print_rc("Sign-in", rc, err);
         return RETURN_ERROR;
     }
@@ -366,6 +550,9 @@ static int cmd_info(void)
     say("Remote:    %s\n", (LONG)(cfg.remote[0] ? cfg.remote : "(not set, use REMOTE=)"));
     say("Charset:   %s, check every %ld min, %s\n", (LONG)cfg.charset, cfg.interval,
            (LONG)(cfg.upload[0] == 'Y' ? "both ways" : "download only (UPLOAD=NO)"));
+    say("Clock:     %s\n", (LONG)(cfg.clock[0] == 'N' ? "not checked (CLOCK=NO)" :
+                                   cfg.clock[1] == 'U' ? "set automatically from the Internet (CLOCK=AUTO)" :
+                                   "window when it is wrong (CLOCK=ASK)"));
     say("AppIcon:   %s\n", (LONG)(cfg.appicon[0] == 'Y' ? "\"OneDrive\" on the Workbench" : "no (APPICON=NO)"));
     if (cfg.state[0])
         say("State:     %s\n", (LONG)cfg.state);
@@ -525,6 +712,9 @@ static int cmd_sync(int once)
     plat_make_dir(cfg.local);
     plat_make_dir(state_dir);
     log_open();
+    if ((rc = start_network()) != RETURN_OK)
+        return rc;
+    clock_at_start();
 
     if (auth_load(&tokens, CFG_TOKEN_FILE) != AD_OK) {
         if (!wbmsg) {
@@ -561,6 +751,8 @@ static int cmd_sync(int once)
     for (;;) {
         plat_make_dir(cfg.local);
         log_open();
+        if (cfg.clock[0] == 'A' && cfg.clock[1] == 'U' && plat_now() - last_clock_check >= 86400UL)
+            check_clock(0, 0);              /* CLOCK=AUTO: once a day */
         sc.maxname = plat_name_limit(cfg.local);
         print_time();
         note("Checking OneDrive %s -> %s\n", (LONG)cfg.remote, (LONG)cfg.local);
@@ -592,6 +784,8 @@ static int cmd_sync(int once)
             break;
         } else {                        /* tried again after INTERVAL */
             note("  Stopped: %s\n", (LONG)(*err ? err : "failed"));
+            if (clock_retry())              /* the clock was wrong and is set now */
+                continue;
         }
         if (once)
             break;
@@ -866,6 +1060,8 @@ int main(int argc, char **argv)
         /* invalid argument or settings not saved */
     } else if (args[ARG_STOP]) {
         rc = cmd_stop();
+    } else if (args[ARG_SETCLOCK]) {
+        rc = cmd_setclock();
     } else if (args[ARG_TEST]) {
         rc = cmd_test(args[ARG_HOST] ? (const char *)args[ARG_HOST] : AD_GRAPH_HOST, tzsrc);
     } else if (args[ARG_LOGIN]) {

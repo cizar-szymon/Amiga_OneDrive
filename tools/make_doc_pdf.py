@@ -101,7 +101,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Arial", 8)
     canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.0 – opis działania i instalacji")
+    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.1 – opis działania i instalacji")
     canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
     canvas.restoreState()
 
@@ -114,7 +114,7 @@ def content():
                  colWidths=[30 * mm, 140 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     s += [head, Spacer(1, 4),
-          P("Wersja programu 0.3.0, dokument z 14.10.2026.", small), Spacer(1, 6)]
+          P("Wersja programu 0.3.1, dokument z 14.10.2026.", small), Spacer(1, 6)]
 
     # ---------------------------------------------------------------- 1
     s.append(P("1. Czym jest AmiDrive", h1))
@@ -329,6 +329,9 @@ def content():
         ["ONCE", "jedno przejście i koniec"],
         ["WINDOW", "(z ikony) okno z bieżącym postępem"],
         ["APPICON=YES|NO", "ikona „OneDrive” na pulpicie w pracy w tle (domyślnie YES)"],
+        ["CLOCK=ASK|AUTO|NO", "zły zegar Amigi: okno z pytaniem (domyślnie) / ustaw sam przy starcie i "
+                              "raz na dobę / nie sprawdzaj"],
+        ["SETCLOCK", "ustawia zegar Amigi (i zegar z baterią) czasem z internetu"],
         ["STOP", "zatrzymuje AmiDrive działający w tle"],
         ["LOGIN / LOGOUT / INFO", "logowanie, wylogowanie, stan konta i ustawień"],
         ["TEST", "sprawdza zegar, strefę, DNS, TLS i połączenie z Microsoft Graph"],
@@ -342,7 +345,10 @@ def content():
         ["Not signed in", "brak tokenu: AmiDrive LOGIN"],
         ["Sign in again", "token wygasł lub odebrano dostęp (np. zmiana hasła): AmiDrive LOGIN"],
         ["OneDrive folder … not found", "zła ścieżka REMOTE albo folder nie istnieje"],
-        ["certificate … / TLS", "zły zegar Amigi albo brak certyfikatów AmiSSL; AmiDrive TEST"],
+        ["certificate rejected, check the Amiga clock",
+         "zły zegar Amigi: AmiDrive pokaże okno z czasem z internetu i przyciskiem <i>Set clock</i> "
+         "(CLOCK=ASK) albo ustawi go sam (CLOCK=AUTO); ręcznie: AmiDrive SETCLOCK"],
+        ["certificate rejected (inne)", "brak lub stare certyfikaty AmiSSL – zaktualizować AmiSSL; AmiDrive TEST"],
         ["already running", "inna kopia już synchronizuje: AmiDrive STOP"],
         ["Plik z dopiskiem -Amiga", "konflikt – obie wersje zachowane, wybierz właściwą"],
     ], [52 * mm, 118 * mm]))

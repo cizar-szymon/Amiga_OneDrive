@@ -1,4 +1,4 @@
-AmiDrive 0.3.0 - a OneDrive client for AmigaOS 3.x
+AmiDrive 0.3.1 - a OneDrive client for AmigaOS 3.x
 ==================================================
 
 AmiDrive synchronises ONE chosen OneDrive folder with a drawer on the Amiga,
@@ -13,7 +13,7 @@ Requirements
   Fast RAM,
 - a TCP/IP stack with bsdsocket.library (Roadshow, AmiTCP, Miami), internet,
 - AmiSSL 5.24 or newer (Aminet: util/libs/AmiSSL-5.x),
-- a correct Amiga clock (else the encrypted connections fail),
+- a correct Amiga clock - AmiDrive can set it (option CLOCK),
 - a Microsoft account with OneDrive (personal or work / school).
 
 
@@ -29,7 +29,8 @@ Installation
      create it in the browser or the OneDrive app),
    - the character set of names, how often to check, both ways or download
      only, the "OneDrive" icon on the Workbench,
-   - the time zone (TZ variable with summer time) and autostart.
+   - the Amiga clock (set it from the Internet / ask / do not check), the
+     time zone (TZ variable with summer time) and autostart.
 4. At the end AmiDrive can start at once. On the first start it shows a
    code in a window: open https://login.microsoft.com/device on a phone or
    PC, enter the code, sign in and allow AmiDrive to access your files.
@@ -55,6 +56,7 @@ In a Shell:
   AmiDrive INFO              settings, sign-in, OneDrive space
   AmiDrive LOGIN / LOGOUT    sign in / delete the token
   AmiDrive TEST              clock, time zone, DNS, TLS, connection
+  AmiDrive SETCLOCK          set the Amiga clock (and battery clock) from the net
 
 Log: <drawer with the files>/.AmiDrive/AmiDrive.log
 
@@ -67,6 +69,7 @@ Options (Shell and Tool Types of the program icon)
   INTERVAL=min           minutes between checks (default 3)
   UPLOAD=YES|NO          NO: download from the cloud only
   APPICON=YES|NO         the "OneDrive" icon on the Workbench
+  CLOCK=ASK|AUTO|NO      wrong clock: window / set it / nothing
   STATE=drawer           another place for the state and the log
   WINDOW                 (from the icon) a window with the progress
   CLIENTID= TENANT=      your own app registration (see below)
@@ -86,6 +89,22 @@ How it works
 - When most files are missing (e.g. a disk not mounted), nothing is deleted.
 - Names longer than the disk allows (OFS/FFS: 30 characters) become
   "start~hhhhhh.ext"; protection bits and comments are not transferred.
+
+
+The Amiga clock
+---------------
+Encrypted connections need a correct date: with a wrong clock the server
+certificates look "not yet valid" or "expired" and signing in fails. AmiDrive
+then takes the time from the Microsoft server (verified by its certificate;
+only its dates are not checked) and:
+  CLOCK=ASK   (default) shows a window with the Amiga time and the Internet
+              time and the buttons "Set clock", "Always set automatically"
+              (set it and from now on CLOCK=AUTO) and "Cancel",
+  CLOCK=AUTO  sets the clock by itself: at the start and once a day,
+  CLOCK=NO    checks nothing.
+The system clock and the battery clock are set (like SetClock SAVE). Amigas
+without a battery clock: CLOCK=AUTO, or "AmiDrive SETCLOCK" in S:User-Startup
+after the network is started.
 
 
 Work account of another organisation

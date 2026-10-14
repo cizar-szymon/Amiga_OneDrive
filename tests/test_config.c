@@ -45,6 +45,24 @@ void test_config(void)
     }
     CHECK_INT(config_set(&c, "APPICON", "YES"), AD_OK);
 
+    /* CLOCK: ASK by default, ASK/AUTO/NO, survives format -> parse */
+    CHECK_STR(c.clock, "ASK");
+    CHECK_INT(config_set(&c, "clock", "auto"), AD_OK);
+    CHECK_STR(c.clock, "AUTO");
+    CHECK_INT(config_set(&c, "CLOCK", "YES"), AD_ERR_PROTO);
+    CHECK_STR(c.clock, "AUTO");
+    {
+        char t[1024];
+        Config u;
+        CHECK(config_format(&c, t, sizeof(t)) > 0);
+        config_defaults(&u);
+        CHECK_INT(config_parse(&u, t), AD_OK);
+        CHECK_STR(u.clock, "AUTO");
+    }
+    CHECK_INT(config_set(&c, "CLOCK", "NO"), AD_OK);
+    CHECK_STR(c.clock, "NO");
+    CHECK_INT(config_set(&c, "CLOCK", "ASK"), AD_OK);
+
     /* kv_get: case, spaces, comments, '=' in the value */
     CHECK_INT(kv_get("# c\n  Key = x \nkey=a=b \r\n", "KEY", v, sizeof(v)), 1);
     CHECK_STR(v, "x");

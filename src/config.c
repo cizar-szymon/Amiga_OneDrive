@@ -74,6 +74,7 @@ void config_defaults(Config *c)
     strcpy(c->charset, "LATIN1");
     strcpy(c->upload, "YES");
     strcpy(c->appicon, "YES");
+    strcpy(c->clock, "ASK");
     c->interval = CFG_INTERVAL_DEFAULT;
     strcpy(c->client_id, AMIDRIVE_CLIENT_ID);
     strcpy(c->tenant, AMIDRIVE_TENANT);
@@ -130,6 +131,12 @@ int config_set(Config *c, const char *key, const char *value)
         strcpy(eq_ci(key, "UPLOAD") ? c->upload : c->appicon, eq_ci(value, "YES") ? "YES" : "NO");
         return AD_OK;
     }
+    if (eq_ci(key, "CLOCK")) {
+        if (!eq_ci(value, "ASK") && !eq_ci(value, "AUTO") && !eq_ci(value, "NO"))
+            return AD_ERR_PROTO;
+        strcpy(c->clock, eq_ci(value, "ASK") ? "ASK" : eq_ci(value, "AUTO") ? "AUTO" : "NO");
+        return AD_OK;
+    }
     if (eq_ci(key, "INTERVAL"))
         return parse_minutes(value, &c->interval) ? AD_OK : AD_ERR_PROTO;
     /* empty: keep the built-in default */
@@ -143,7 +150,7 @@ int config_set(Config *c, const char *key, const char *value)
 int config_parse(Config *c, const char *text)
 {
     static const char *const keys[] = {
-        "LOCAL", "REMOTE", "STATE", "CHARSET", "UPLOAD", "APPICON", "INTERVAL", "CLIENTID",
+        "LOCAL", "REMOTE", "STATE", "CHARSET", "UPLOAD", "APPICON", "CLOCK", "INTERVAL", "CLIENTID",
         "TENANT", NULL
     };
     char value[CFG_PATH_SIZE];
@@ -198,6 +205,7 @@ int config_format(const Config *c, char *buf, size_t size)
         !append(buf, size, &len, "CHARSET", c->charset) ||
         !append(buf, size, &len, "UPLOAD", c->upload) ||
         !append(buf, size, &len, "APPICON", c->appicon) ||
+        !append(buf, size, &len, "CLOCK", c->clock) ||
         !append(buf, size, &len, "INTERVAL", num + i) ||
         !append(buf, size, &len, "CLIENTID", c->client_id) ||
         !append(buf, size, &len, "TENANT", c->tenant))
