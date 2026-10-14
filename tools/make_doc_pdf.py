@@ -90,10 +90,10 @@ def table(rows, widths, header=True):
 
 
 def icon_image():
-    img = make_icon.draw()
+    img = make_icon.art_cloud()
     w, h = img.size
     path = os.path.join(tempfile.gettempdir(), "amidrive_icon_doc.png")
-    img.resize((w * 4, h * 4), make_icon.Image.NEAREST).save(path)
+    img.resize((w * 4, h * 4), make_icon.Image.NEAREST).save(path)       # transparent PNG
     return Image(path, width=26 * mm, height=26 * mm * h / w)
 
 

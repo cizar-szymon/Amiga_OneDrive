@@ -56,27 +56,26 @@ def build(ver):
     os.makedirs(os.path.join(out, "Docs"))
     os.makedirs(os.path.join(out, "WBStartup"))
 
-    cloud, doc, drawer = make_icon.draw(), make_icon.draw_doc(), make_icon.draw_drawer()
-    make_icon.save_icon(os.path.join(top, name + ".info"), drawer, drawer=True)
+    make_icon.save_icon(os.path.join(top, name + ".info"), "drawer", drawer=True)
 
     shutil.copy(os.path.join(ROOT, "build", "amiga", "AmiDrive"), os.path.join(out, "AmiDrive"))
-    make_icon.save_icon(os.path.join(out, "AmiDrive.info"), cloud, PROG_TOOLTYPES)
+    make_icon.save_icon(os.path.join(out, "AmiDrive.info"), "cloud", PROG_TOOLTYPES)
 
     amiga_text(os.path.join(ROOT, "install", "Install-AmiDrive"), os.path.join(out, "Install-AmiDrive"))
-    make_icon.save_icon(os.path.join(out, "Install-AmiDrive.info"), make_icon.draw_installer(),
+    make_icon.save_icon(os.path.join(out, "Install-AmiDrive.info"), "installer",
                         ["APPNAME=AmiDrive", "MINUSER=AVERAGE", "DEFUSER=AVERAGE"], "Installer")
 
-    make_icon.save_icon(os.path.join(out, "Docs.info"), drawer, drawer=True)
+    make_icon.save_icon(os.path.join(out, "Docs.info"), "drawer", drawer=True)
     for d in DOCS:
         amiga_text(os.path.join(ROOT, "docs", "release", "amiga", d), os.path.join(out, "Docs", d))
-        make_icon.save_icon(os.path.join(out, "Docs", d + ".info"), doc, default_tool=VIEWER)
+        make_icon.save_icon(os.path.join(out, "Docs", d + ".info"), "doc", default_tool=VIEWER)
     shutil.copy(os.path.join(ROOT, "docs", "AmiDrive-opis.pdf"), os.path.join(out, "Docs"))
 
     with open(os.path.join(out, "WBStartup", "AmiDrive"), "wb") as f:
         f.write(b"AmiDrive autostart: the icon starts AmiDrive in the background\n"
                 b"when Workbench starts. Delete AmiDrive and AmiDrive.info here to\n"
                 b"switch it off.\n")
-    make_icon.save_icon(os.path.join(out, "WBStartup", "AmiDrive.info"), cloud, ["DONOTWAIT"],
+    make_icon.save_icon(os.path.join(out, "WBStartup", "AmiDrive.info"), "cloud", ["DONOTWAIT"],
                         "Work:AmiDrive/AmiDrive")
     print(out)
     return top, name
