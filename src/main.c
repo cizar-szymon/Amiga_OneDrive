@@ -9,6 +9,8 @@
  *   AmiDrive INFO           settings, sign-in state, OneDrive owner and space
  *   AmiDrive TEST           check clock, time zone, DNS, TLS and HTTP against Graph
  *   AmiDrive TEST HOST=x    TLS + "GET /" to another host (e.g. expired.badssl.com)
+ *   AmiDrive TEST URL=u [TO=file] [RCVBUF=n]   download speed of this client: http://
+ *                           (plain TCP) against https:// (TLS), same code and buffers
  *   AmiDrive STOP           stop the AmiDrive running in the background (waits for it)
  *   AmiDrive SETCLOCK       set the Amiga clock (and battery clock) from the Internet
  *            [CLOCK=ASK|AUTO|NO]            wrong clock: window / set it / nothing
@@ -68,10 +70,11 @@ size_t __stack = 65536;                 /* OpenSSL needs more than the Shell def
 char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDRIVE_DATE ")";
 
 #define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
-                 "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K,CLOCK/K,SETCLOCK/S"
+                 "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K,CLOCK/K,SETCLOCK/S," \
+                 "URL/K,TO/K,RCVBUF/K/N"
 enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
        ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_WINDOW, ARG_STOP, ARG_APPICON,
-       ARG_CLOCK, ARG_SETCLOCK, ARG_COUNT };
+       ARG_CLOCK, ARG_SETCLOCK, ARG_URL, ARG_TO, ARG_RCVBUF, ARG_COUNT };
 
 /* the output window when started from Workbench: opens on the first output */
 #define WB_WINDOW "CON:40/30/600/180/" AMIDRIVE_NAME "/AUTO/CLOSE/WAIT"
@@ -720,7 +723,7 @@ static void show_idle(void)
     } else {
         l3[0] = '\0';
     }
-    status_show("Up to date - waiting for the next check", l2, l3, -1);
+    status_show("Up to date", l2, l3, -1);
 }
 
 static void show_progress(const SyncProgress *p)
@@ -729,15 +732,17 @@ static void show_progress(const SyncProgress *p)
     long t = ticks_since(&pg.phase_start);
     unsigned long rate = 0;
     int pct = percent_of(p->done, p->total);
-    const char *what = p->phase == SYNC_SEND ? "Sending to OneDrive" : "Getting the changes from OneDrive";
+    const char *what = p->phase == SYNC_SEND ? "Uploading" : "Downloading";
 
     if (t >= 50)                        /* bytes per second, after a second */
         rate = pg.xfer > 40000000UL ? pg.xfer / (unsigned long)t * 50 : pg.xfer * 50 / (unsigned long)t;
 
     if (p->phase == SYNC_SCAN) {
-        status_show("Looking for changes on the Amiga", cfg.local, "", -1);
+        status_show("Checking the Amiga", cfg.local, "", -1);
         return;
     }
+    if (p->phase == SYNC_CLOUD && pct < 0 && !p->file)
+        what = "Checking OneDrive";     /* reading the changes, nothing to download yet */
     if (pct >= 0)
         sprintf(l1, "%s: %d %%", what, pct);
     else
@@ -750,7 +755,7 @@ static void show_progress(const SyncProgress *p)
         if (pct < 0)                    /* the whole is unknown: the bar shows the file */
             pct = percent_of(p->file_done, p->file_size);
     } else if (p->phase == SYNC_CLOUD) {
-        sprintf(l2, "%ld items of OneDrive read", p->items);
+        sprintf(l2, "Checking OneDrive: %ld items", p->items);
     } else {
         l2[0] = '\0';
     }
@@ -849,7 +854,7 @@ static void pass_begins(void)
     next_check = 0;
     status_busy(1);
     if (status_is_open())
-        status_show("Getting the changes from OneDrive", "Connecting ...", "", -1);
+        status_show("Checking OneDrive", "Connecting ...", "", -1);
 }
 
 /* Wait secs between passes. AD_OK: time is up or "synchronise now" (AppIcon menu or
@@ -1099,6 +1104,77 @@ static int test_state_file(void)
     return ok ? AD_OK : AD_ERR;
 }
 
+/* AmiDrive TEST URL=...: how fast this client downloads, to compare plain TCP with TLS */
+static int cmd_speed(const char *url, const char *to)
+{
+    static char host[128], body[16384];
+    static Http h;
+    const char *p, *path;
+    char err[200];
+    struct DateStamp t0;
+    unsigned long total = 0;
+    NetConn *c;
+    BPTR fh = 0;
+    long n, ticks;
+    int port, rc;
+
+    if (strncmp(url, "https://", 8) == 0) {
+        port = 443;
+        p = url + 8;
+    } else if (strncmp(url, "http://", 7) == 0) {
+        port = 80;
+        p = url + 7;
+    } else {
+        say("URL must start with http:// or https://\n");
+        return RETURN_ERROR;
+    }
+    if (!(path = strchr(p, '/')) || (size_t)(path - p) >= sizeof(host)) {
+        say("Invalid URL\n");
+        return RETURN_ERROR;
+    }
+    memcpy(host, p, (size_t)(path - p));
+    host[path - p] = '\0';
+    if ((rc = start_network()) != RETURN_OK)
+        return rc;
+
+    DateStamp(&t0);
+    if (!(c = net_connect(host, port, SESS_TIMEOUT, err, sizeof(err)))) {
+        say("Connect: %s\n", (LONG)err);
+        return RETURN_ERROR;
+    }
+    say("%s:%ld  %s, %ld ms\n", (LONG)host, (LONG)port, (LONG)net_tls_info(c), ticks_since(&t0) * 20);
+    http_init(&h, c);
+    if ((rc = http_request(&h, "GET", host, path, NULL, NULL, 0)) != AD_OK ||
+        (rc = http_read_response(&h)) != AD_OK || h.status != 200) {
+        say("Request failed (%ld, HTTP %ld)\n", (LONG)rc, (LONG)h.status);
+        net_close(c);
+        return RETURN_ERROR;
+    }
+    if (to && !(fh = Open((STRPTR)to, MODE_NEWFILE))) {
+        say("Cannot write %s\n", (LONG)to);
+        net_close(c);
+        return RETURN_ERROR;
+    }
+    DateStamp(&t0);
+    while ((n = http_read_body(&h, body, (long)sizeof(body))) > 0) {
+        total += (unsigned long)n;
+        if (fh && Write(fh, body, n) != n)
+            break;
+        if (plat_break())
+            break;
+    }
+    ticks = ticks_since(&t0);
+    if (fh)
+        Close(fh);
+    net_close(c);
+    if (ticks < 1)
+        ticks = 1;
+    say("%lu bytes in %ld.%02ld s = %lu KB/s%s%s\n", total, ticks / 50, (ticks % 50) * 2,
+        total / 1024 * 50 / (unsigned long)ticks, (LONG)(to ? " to " : " (not saved)"),
+        (LONG)(to ? to : ""));
+    return n < 0 ? RETURN_ERROR : RETURN_OK;
+}
+
 static int cmd_test(const char *host, const char *tzsrc)
 {
     char iso[24];
@@ -1282,6 +1358,10 @@ int main(int argc, char **argv)
         rc = cmd_stop();
     } else if (args[ARG_SETCLOCK]) {
         rc = cmd_setclock();
+    } else if (args[ARG_TEST] && args[ARG_URL]) {
+        if (args[ARG_RCVBUF])
+            net_rcvbuf = *(LONG *)args[ARG_RCVBUF];
+        rc = cmd_speed((const char *)args[ARG_URL], (const char *)args[ARG_TO]);
     } else if (args[ARG_TEST]) {
         rc = cmd_test(args[ARG_HOST] ? (const char *)args[ARG_HOST] : AD_GRAPH_HOST, tzsrc);
     } else if (args[ARG_LOGIN]) {

@@ -18,7 +18,10 @@ extern int net_cert_time_error;
  * read the time from a server when the Amiga clock is wrong (clock_amiga.c). */
 extern int net_ignore_cert_time;
 
-/* "TLSv1.3 TLS_AES_256_GCM_SHA384" */
+/* SO_RCVBUF for new connections in bytes (0 = the stack's default). */
+extern long net_rcvbuf;
+
+/* "TLSv1.3 TLS_AES_256_GCM_SHA384"; port 80 is plain TCP (speed tests only) */
 const char *net_tls_info(NetConn *c);
 
 #endif

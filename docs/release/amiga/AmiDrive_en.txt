@@ -1,4 +1,4 @@
-AmiDrive 0.3.3 - a OneDrive client for AmigaOS 3.x
+AmiDrive 0.3.4 - a OneDrive client for AmigaOS 3.x
 ==================================================
 
 AmiDrive synchronises ONE chosen OneDrive folder with a drawer on the Amiga,
@@ -53,9 +53,9 @@ The "OneDrive" icon on the Workbench (while AmiDrive runs):
   Tools menu          "AmiDrive: status", "AmiDrive: synchronise now"
                       and "AmiDrive: stop"
 
-The AmiDrive window ("AmiDrive - OneDrive") has the buttons "Synchronise now"
-(disabled while one runs), "Stop AmiDrive" (ends the background work, the
-icon goes away) and "Hide". Workbench 3.2 has no right-button menus for
+The AmiDrive window ("AmiDrive - OneDrive") has the buttons "Sync now"
+(disabled while one runs), "Stop" (ends the background work, the icon goes
+away) and "Hide". Workbench 3.2 has no right-button menus for
 icons - the same commands are in the Tools menu as well.
 
 During a synchronisation the window shows what is being done, a bar with
@@ -133,6 +133,17 @@ Microsoft Entra ID (public client, "Allow public client flows: Yes",
 Microsoft Graph permissions Files.ReadWrite and offline_access) and uses:
   AmiDrive CLIENTID=<application id> TENANT=<tenant id>
   AmiDrive LOGIN
+
+
+Speed
+-----
+The connections to OneDrive are encrypted, and on the Amiga the encryption,
+not the network, sets the speed. Measured on an A1200 with a 68060/50 and the
+Warp's Ethernet, the same 5 MB file: no encryption 1590 KB/s, AES-256 215 KB/s,
+ChaCha20 337 KB/s. AmiDrive offers the ciphers fastest on a 68k (ChaCha20,
+then AES-128); the Microsoft servers choose AES-128: a full synchronisation of
+20 MB from OneDrive takes about 108 s (192 KB/s; with AES-256 it was 130 s).
+Measure it yourself: AmiDrive TEST URL=https://... (and http://... to compare).
 
 
 Security

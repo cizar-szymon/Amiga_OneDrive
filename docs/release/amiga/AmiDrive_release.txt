@@ -5,6 +5,13 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.3.4 (14.10.2026)
+------------------
+- Szybsze pobieranie: szyfry najszybsze na 68k (ChaCha20, AES-128 zamiast
+  AES-256) - z OneDrive ok. 20% szybciej.
+- Mniejsze okno AmiDrive, przyciski "Sync now", "Stop", "Hide".
+- AmiDrive TEST URL=... - pomiar szybkości pobierania (http i https).
+
 0.3.3 (14.10.2026)
 ------------------
 - Okno AmiDrive z przyciskami "Synchronise now", "Stop AmiDrive" i "Hide";

@@ -15,9 +15,9 @@
 #include "amidrive.h"
 #include "status_amiga.h"
 
-#define WIN_WIDTH 460                   /* inner width */
-#define MARGIN    10
-#define BUTTON_W  140
+#define WIN_WIDTH 360                   /* inner width */
+#define MARGIN    8
+#define BUTTON_W  100
 
 enum { GID_SYNC = 1, GID_STOP, GID_HIDE };
 
@@ -97,7 +97,7 @@ static void redraw(void)
 /* the three buttons under the text */
 static struct Gadget *make_buttons(struct Screen *scr, int top, int fh)
 {
-    static const char *const labels[3] = { "Synchronise now", "Stop AmiDrive", "Hide" };
+    static const char *const labels[3] = { "Sync now", "Stop", "Hide" };
     struct NewGadget ng;
     struct Gadget *g;
     int i, gap = (WIN_WIDTH - 2 * MARGIN - 3 * BUTTON_W) / 2;

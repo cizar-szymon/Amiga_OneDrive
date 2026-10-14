@@ -28,7 +28,7 @@ Technika: C (vbcc), `bsdsocket.library` (Roadshow), AmiSSL 5 (OpenSSL 3), własn
 z keep-alive, parser JSON jsmn, Microsoft Graph API (`/delta`, pobieranie, wysyłanie w sesjach).
 Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawem testów.
 
-**Stan (wersja 0.3.3):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
+**Stan (wersja 0.3.4):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
 (OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
 start z ikony, autostart z `WBStartup`, ikona „OneDrive” na pulpicie Workbencha.
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
@@ -67,6 +67,7 @@ AmiDrive APPICON=NO                   bez ikony „OneDrive” na pulpicie (domy
 AmiDrive CLOCK=ASK|AUTO|NO            zły zegar: okno z pytaniem / ustaw sam / nic (domyślnie ASK)
 AmiDrive SETCLOCK                     ustawia zegar Amigi (i zegar z baterią) z internetu
 AmiDrive TEST                         sprawdza zegar, strefę czasową, DNS, TLS i HTTP
+AmiDrive TEST URL=https://… [TO=plik] szybkość pobierania tego klienta (http:// bez TLS dla porównania)
 AmiDrive TEST HOST=badssl.com         to samo dla innego serwera (sprawdzanie certyfikatów)
 ```
 
@@ -82,7 +83,7 @@ Ponowne kliknięcie ikony pyta, czy zatrzymać.
 
 **Ikona „OneDrive” na pulpicie (AppIcon):** dopóki AmiDrive pracuje w tle, na pulpicie
 Workbencha jest ikona „OneDrive”. Dwuklik otwiera synchronizowany katalog (OS 3.5+) i okno
-AmiDrive z przyciskami „Synchronise now”, „Stop AmiDrive”, „Hide” (także w trakcie
+AmiDrive z przyciskami „Sync now”, „Stop”, „Hide” (także w trakcie
 synchronizacji – wtedy z postępem, procentami i czasem do końca; Workbench 3.2 nie ma menu ikon
 pod prawym przyciskiem), pliki
 i szuflady upuszczone na ikonę są kopiowane do niego (`C:Copy ALL CLONE`) i od razu wysyłane,

@@ -33,6 +33,7 @@
 | Zegar Amigi: czas z nagłówka `Date` serwera Graph (TLS z weryfikacją łańcucha i nazwy, bez dat), okno „Set clock / Always set automatically / Cancel”, `CLOCK=ASK\|AUTO\|NO`, `SETCLOCK`, pytanie w instalatorze (0.3.1) | ✅ testy + A1200 |
 | Okno postępu (0.3.2): `SyncProgress` w `sync.c` (faza, plik, bajty, całość przy pełnej liście i wysyłaniu), okno z paskiem, prędkością i czasem do końca, stan między przejściami; ikona i menu obsługiwane w trakcie przejścia | ✅ testy + A1200 |
 | Przyciski w oknie AmiDrive (0.3.3): „Synchronise now” (wyszarzony w trakcie), „Stop AmiDrive”, „Hide” (GadTools); dwuklik na OneDrive zawsze otwiera szufladę i okno | ✅ A1200 |
+| Szybkość TLS (0.3.4): szyfry ChaCha20 / AES-128 zamiast AES-256, `TEST URL=` (http bez TLS / https, ten sam klient), mniejsze okno („Sync now / Stop / Hide”) | ✅ A1200 |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
@@ -127,6 +128,24 @@
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
   `untrusted-root`; przyjęty `badssl.com`.
+
+## Wydajność (A1200, 68060/50, Ethernet Warp, 14.10.2026)
+
+| Pomiar | Wynik |
+|---|---|
+| `openssl speed` (AmiSSL 5.24 / OpenSSL 3.5.4), bloki 16 KB | AES-128-GCM 298 KB/s, AES-256-GCM 261 KB/s, ChaCha20-Poly1305 458 KB/s |
+| `wget` http 5 MB do `RAM:` | 1,15 MB/s (chwilami 3 MB/s) |
+| `AmiDrive TEST URL=` cachefly 5 MB, http (bez TLS) | 1590 KB/s |
+| to samo, https, AES-256-GCM (wybór serwera przy dawnej kolejności) | 215 KB/s |
+| to samo, https, ChaCha20 (nowa kolejność) | 337 KB/s |
+| Microsoft (Graph, login, SharePoint) przy nowej kolejności | wybiera AES-128-GCM (wcześniej AES-256) |
+| OneDrive, pełna synchronizacja 20,7 MB do `RAM:` | AES-256: 130 s (159 KB/s), AES-128: 108 s (192 KB/s) |
+
+Wniosek: przy szyfrowaniu ogranicza procesor (AES bez instrukcji sprzętowych), sieć i stos
+TCP dają ponad 1,5 MB/s. TLS 1.3: oferowane tylko `TLS_CHACHA20_POLY1305_SHA256` i
+`TLS_AES_128_GCM_SHA256` (AES-128 jest obowiązkowy w TLS 1.3, więc każdy serwer go ma);
+TLS 1.2: ECDHE z ChaCha20 / AES-GCM. Nawiązanie połączenia 2,7–12 s (RSA/ECDHE na 68060),
+dlatego keep-alive.
 
 ## Decyzje
 

@@ -101,7 +101,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Arial", 8)
     canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.3 – opis działania i instalacji")
+    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.4 – opis działania i instalacji")
     canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
     canvas.restoreState()
 
@@ -114,7 +114,7 @@ def content():
                  colWidths=[30 * mm, 140 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     s += [head, Spacer(1, 4),
-          P("Wersja programu 0.3.3, dokument z 14.10.2026.", small), Spacer(1, 6)]
+          P("Wersja programu 0.3.4, dokument z 14.10.2026.", small), Spacer(1, 6)]
 
     # ---------------------------------------------------------------- 1
     s.append(P("1. Czym jest AmiDrive", h1))
@@ -213,8 +213,8 @@ def content():
                "(chmurka):"))
     s += bullets([
         "<b>dwuklik</b> otwiera synchronizowany katalog <font name='Consolas'>Work:OneDrive</font> "
-        "(AmigaOS 3.5 lub nowszy) i <b>okno AmiDrive</b> z przyciskami <i>Synchronise now</i>, "
-        "<i>Stop AmiDrive</i> i <i>Hide</i> – od razu, także w trakcie synchronizacji; wtedy okno "
+        "(AmigaOS 3.5 lub nowszy) i <b>okno AmiDrive</b> z przyciskami <i>Sync now</i>, "
+        "<i>Stop</i> i <i>Hide</i> – od razu, także w trakcie synchronizacji; wtedy okno "
         "pokazuje postęp: pasek z procentami, bieżący plik, prędkość i szacowany czas do końca "
         "(Workbench 3.2 nie ma menu ikon pod prawym przyciskiem);",
         "<b>pliki i szuflady upuszczone na ikonę</b> są kopiowane do tego katalogu i od razu "
@@ -310,6 +310,20 @@ def content():
         ]),
         C("AmiDrive CLIENTID=<client-id> TENANT=<tenant-id albo organizations>\nAmiDrive LOGIN"),
     ]))
+    s.append(P("Szybkość", h2))
+    s.append(P("Na Amidze szybkość ogranicza szyfrowanie połączeń, nie sieć. Pomiar na A1200 "
+               "(68060/50, Ethernet karty Warp), ten sam plik 5 MB:"))
+    s.append(table([
+        ["Połączenie", "Szybkość"],
+        ["bez szyfrowania (http)", "1590 KB/s"],
+        ["TLS 1.3, AES-256-GCM", "215 KB/s"],
+        ["TLS 1.3, ChaCha20-Poly1305", "337 KB/s"],
+        ["OneDrive, pełna synchronizacja 20 MB (AES-128 – wybór Microsoftu)", "192 KB/s (108 s; z AES-256: 130 s)"],
+    ], [110 * mm, 60 * mm]))
+    s.append(Spacer(1, 4))
+    s.append(P("AmiDrive proponuje szyfry najszybsze na 68k (ChaCha20, potem AES-128), wszystkie "
+               "w pełni bezpieczne. Własny pomiar: <font name='Consolas'>AmiDrive TEST "
+               "URL=https://…</font>."))
     s.append(P("Bezpieczeństwo", h2))
     s += bullets([
         "Plik <font name='Consolas'>ENVARC:AmiDrive/token</font> daje dostęp do plików w OneDrive – "

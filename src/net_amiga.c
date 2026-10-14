@@ -30,6 +30,7 @@ struct Library *SocketBase, *AmiSSLMasterBase, *AmiSSLBase, *AmiSSLExtBase;
 
 static SSL_CTX *ctx;
 int net_cert_time_error, net_ignore_cert_time;
+long net_rcvbuf;                        /* SO_RCVBUF in bytes, 0 = the stack's default */
 static int amissl_open;
 
 struct NetConn {
@@ -99,6 +100,13 @@ int net_init(char *err, int errsize)
         return AD_ERR_TLS;
     }
     SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+    /* The ciphers fastest on a 68k without AES instructions first, all of them strong
+     * (AEAD, forward secrecy). 68060/50: ChaCha20-Poly1305 458 KB/s, AES-128-GCM 298,
+     * AES-256-GCM 261 (openssl speed). The server has the last word. */
+    SSL_CTX_set_ciphersuites(ctx, "TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256");
+    SSL_CTX_set_cipher_list(ctx, "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:"
+                                 "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
+                                 "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384");
     /* a server closing without close_notify ends an unsized body, it is not an error */
     SSL_CTX_set_options(ctx, SSL_OP_IGNORE_UNEXPECTED_EOF);
     if (!SSL_CTX_set_default_verify_paths(ctx)) {
@@ -162,10 +170,16 @@ NetConn *net_connect(const char *host, int port, long timeout_secs, char *err, i
     tv.tv_usec = 0;
     setsockopt(c->sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     setsockopt(c->sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    if (net_rcvbuf > 0)
+        setsockopt(c->sock, SOL_SOCKET, SO_RCVBUF, &net_rcvbuf, sizeof(net_rcvbuf));
 
     if (connect(c->sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         set_err(err, errsize, Errno() == EINTR ? "interrupted" : "cannot connect", host);
         goto fail;
+    }
+    if (port == 80) {                   /* plain HTTP: only AmiDrive TEST URL=http://... */
+        strcpy(c->info, "plain TCP, no TLS");
+        return c;
     }
 
     if (!(c->ssl = SSL_new(ctx))) {
@@ -235,7 +249,13 @@ static int io_error(NetConn *c, int rc)
 
 long net_read(NetConn *c, void *buf, long len)
 {
-    int n = SSL_read(c->ssl, buf, (int)len);
+    int n;
+
+    if (!c->ssl) {                      /* plain TCP: speed tests only */
+        n = (int)recv(c->sock, buf, len, 0);
+        return n >= 0 ? n : (Errno() == EINTR ? AD_ERR_BREAK : AD_ERR_NET);
+    }
+    n = SSL_read(c->ssl, buf, (int)len);
     return n > 0 ? n : io_error(c, n);
 }
 
@@ -244,7 +264,7 @@ int net_write(NetConn *c, const void *buf, long len)
     const char *p = buf;
 
     while (len > 0) {
-        int n = SSL_write(c->ssl, p, (int)len);
+        int n = c->ssl ? SSL_write(c->ssl, p, (int)len) : (int)send(c->sock, (APTR)p, len, 0);
         if (n <= 0) {
             int rc = io_error(c, n);
             return rc == 0 ? AD_ERR_NET : rc;
