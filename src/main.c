@@ -715,11 +715,11 @@ static void show_idle(void)
 
     if (!status_is_open())
         return;
-    sprintf(l2, "Last check: %s", last_result[0] ? last_result : "none yet");
+    sprintf(l2, "Last check %s", last_result[0] ? last_result : "-");
     if (next_check) {
         tz_format_iso8601(next_check, t);
         t[16] = '\0';
-        sprintf(l3, "Next check at %s", t + 11);
+        sprintf(l3, "Next at %s", t + 11);
     } else {
         l3[0] = '\0';
     }

@@ -62,27 +62,27 @@ static struct DiskObject *load_image(const char *progname)
     return d;
 }
 
-/* The drawer with the files gets an icon if it has none: Workbench keeps the window
- * size and the view in it. A bigger window, all files, by name. An icon that is there
- * (the user's window) is left alone; a volume root ("Work:") has none. */
+/* The drawer with the files opens right below the AmiDrive window, as wide, all files
+ * by name: Workbench takes the window from the drawer's icon, so the icon is set up
+ * before each opening (made if there is none; its image and place are kept). A volume
+ * root ("Work:") has no drawer icon of its own. */
 static void drawer_icon(void)
 {
     struct DiskObject *d;
     size_t n = strlen(local_dir);
     BPTR lock;
-    int x = 64, y = 140, w = 340, h = 120;
+    int x = 64, y = 140, w = 260, h = 120, made = 0;
 
     if (!n || local_dir[n - 1] == ':' || local_dir[n - 1] == '/')
         return;
-    if ((d = GetDiskObject((STRPTR)local_dir)) != NULL) {
-        FreeDiskObject(d);
-        return;
-    }
     if ((lock = Lock((STRPTR)local_dir, ACCESS_READ)) == 0)
         return;                         /* not there (yet) */
     UnLock(lock);
-    if (!(d = GetDefDiskObject(WBDRAWER)))
-        return;
+    if (!(d = GetDiskObject((STRPTR)local_dir))) {
+        if (!(d = GetDefDiskObject(WBDRAWER)))
+            return;
+        made = 1;
+    }
     if (d->do_DrawerData) {
         if (status_layout(&x, &y, &w, &h))  /* below the AmiDrive window, as wide */
             y += h + 2;
@@ -92,9 +92,10 @@ static void drawer_icon(void)
         d->do_DrawerData->dd_NewWindow.Height = 240;
         d->do_DrawerData->dd_Flags = DDFLAGS_SHOWALL;
         d->do_DrawerData->dd_ViewModes = DDVM_BYNAME;
+        if (made)
+            d->do_CurrentX = d->do_CurrentY = NO_ICON_POSITION;
+        PutDiskObject((STRPTR)local_dir, d);
     }
-    d->do_CurrentX = d->do_CurrentY = NO_ICON_POSITION;
-    PutDiskObject((STRPTR)local_dir, d);
     FreeDiskObject(d);
 }
 
@@ -143,8 +144,10 @@ static void open_drawer(void)
         { TAG_DONE, 0 }
     };
 
-    if (WorkbenchBase->lib_Version >= 44)
+    if (WorkbenchBase->lib_Version >= 44) {
+        drawer_icon();
         OpenWorkbenchObjectA((STRPTR)local_dir, WorkbenchBase->lib_Version >= 45 ? tags : NULL);
+    }
 }
 
 /* 1 if path is LOCAL or inside it (both full names from locks) */

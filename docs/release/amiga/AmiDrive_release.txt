@@ -5,6 +5,12 @@ Zgłaszanie błędów: podaj numer wersji (w Shellu: Version AmiDrive) i dołąc
 dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 
 
+0.3.8 (14.10.2026)
+------------------
+- Szuflada z plikami zawsze dokładnie pod oknem AmiDrive, tej samej
+  szerokości (także gdy jej ikona była wcześniej, np. z instalatora).
+- Napisy: "Last check 16:24 no changes", "Next at 16:27".
+
 0.3.7 (14.10.2026)
 ------------------
 - Okno AmiDrive tak szerokie jak przyciski (szuflada pod nim też węższa),
