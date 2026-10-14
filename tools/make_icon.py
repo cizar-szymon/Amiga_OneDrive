@@ -139,6 +139,28 @@ def draw_doc(w=30, h=34):
     return img
 
 
+def draw_installer(w=46, h=40):
+    """the installer: a small cloud, an arrow down into a floppy disk"""
+    from PIL import ImageDraw
+    grey, black, white, blue = WB4
+    img = Image.new("RGB", (w, h), grey)
+    d = ImageDraw.Draw(img)
+    parts = [(2, 7, 13, 18), (7, 2, 21, 15), (15, 5, 27, 17), (3, 11, 26, 19)]
+    for x0, y0, x1, y1 in parts:                    # the cloud, upper left
+        d.ellipse((x0 - 1, y0 - 1, x1 + 1, y1 + 1), fill=black)
+    for x0, y0, x1, y1 in parts:
+        d.ellipse((x0, y0, x1, y1), fill=white)
+    # the floppy, lower right: body, shutter, label
+    d.rectangle((20, 16, 43, 38), fill=blue, outline=black)
+    d.rectangle((25, 16, 37, 23), fill=grey, outline=black)
+    d.rectangle((33, 17, 35, 22), fill=blue)
+    d.rectangle((23, 26, 40, 38), fill=white, outline=black)
+    # arrow down on the floppy's label: install
+    d.rectangle((30, 27, 32, 31), fill=blue)
+    d.polygon([(26, 31), (36, 31), (31, 36)], fill=blue)
+    return img
+
+
 def draw_drawer(w=46, h=30):
     """a drawer (folder) with the cloud's blue"""
     from PIL import ImageDraw

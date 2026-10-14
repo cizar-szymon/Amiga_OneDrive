@@ -63,7 +63,7 @@ def build(ver):
     make_icon.save_icon(os.path.join(out, "AmiDrive.info"), cloud, PROG_TOOLTYPES)
 
     amiga_text(os.path.join(ROOT, "install", "Install-AmiDrive"), os.path.join(out, "Install-AmiDrive"))
-    make_icon.save_icon(os.path.join(out, "Install-AmiDrive.info"), cloud,
+    make_icon.save_icon(os.path.join(out, "Install-AmiDrive.info"), make_icon.draw_installer(),
                         ["APPNAME=AmiDrive", "MINUSER=AVERAGE", "DEFUSER=AVERAGE"], "Installer")
 
     make_icon.save_icon(os.path.join(out, "Docs.info"), drawer, drawer=True)
