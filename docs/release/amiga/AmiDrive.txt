@@ -1,4 +1,4 @@
-AmiDrive 0.3.6 - klient OneDrive dla AmigaOS 3.x
+AmiDrive 0.3.7 - klient OneDrive dla AmigaOS 3.x
 ================================================
 
 AmiDrive synchronizuje JEDEN wybrany folder z OneDrive z szufladą na dysku

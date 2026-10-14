@@ -674,15 +674,15 @@ static void fmt_bytes(unsigned long b, char *out)
         sprintf(out, "%lu.%lu MB", b / 1048576UL, (b % 1048576UL) * 10 / 1048576UL);
 }
 
-/* seconds -> "about 40 s", "about 3 min", "about 1 h 20 min" */
+/* seconds left -> "~40 s", "~3 min", "~1 h 20 min" (the window is narrow) */
 static void fmt_left(unsigned long s, char *out)
 {
     if (s < 60)
-        sprintf(out, "about %lu s left", s < 5 ? 5UL : (s + 4) / 5 * 5);
+        sprintf(out, "~%lu s", s < 5 ? 5UL : (s + 4) / 5 * 5);
     else if (s < 3600)
-        sprintf(out, "about %lu min left", (s + 30) / 60);
+        sprintf(out, "~%lu min", (s + 30) / 60);
     else
-        sprintf(out, "about %lu h %lu min left", s / 3600, s / 60 % 60);
+        sprintf(out, "~%lu h %lu min", s / 3600, s / 60 % 60);
 }
 
 /* the path below LOCAL ("Gry/a.adf") */
@@ -749,13 +749,14 @@ static void show_progress(const SyncProgress *p)
         strcpy(l1, what);
 
     if (p->file) {
-        fmt_bytes(p->file_done, a);
-        fmt_bytes(p->file_size, b);
-        sprintf(l2, "%.120s  (%s of %s)", below_local(p->file), a, b);
+        int fp = percent_of(p->file_done, p->file_size);
+
+        /* the percentage first: long names are cut at the window edge */
+        sprintf(l2, "%d%% %.120s", fp < 0 ? 0 : fp, below_local(p->file));
         if (pct < 0)                    /* the whole is unknown: the bar shows the file */
             pct = percent_of(p->file_done, p->file_size);
     } else if (p->phase == SYNC_CLOUD) {
-        sprintf(l2, "Checking OneDrive: %ld items", p->items);
+        sprintf(l2, "%ld items read", p->items);
     } else {
         l2[0] = '\0';
     }
@@ -763,17 +764,17 @@ static void show_progress(const SyncProgress *p)
     if (p->total) {
         fmt_bytes(p->done, a);
         fmt_bytes(p->total, b);
-        sprintf(l3, "%s of %s", a, b);
+        sprintf(l3, "%s/%s", a, b);
     } else {
         fmt_bytes(p->done, a);
         sprintf(l3, "%ld files, %s", p->files, a);
     }
     if (rate) {
         fmt_bytes(rate, b);
-        sprintf(l3 + strlen(l3), ", %s/s", b);
+        sprintf(l3 + strlen(l3), "  %s/s", b);
         if (p->total && t >= 250 && p->total > p->done) {      /* an estimate after 5 s */
             fmt_left((p->total - p->done) / rate, c);
-            sprintf(l3 + strlen(l3), ", %s", c);
+            sprintf(l3 + strlen(l3), "  %s", c);
         }
     }
     status_show(l1, l2, l3, pct);

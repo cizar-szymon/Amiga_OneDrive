@@ -5,6 +5,12 @@ Reporting bugs: give the version (in a Shell: Version AmiDrive) and attach
 the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
 
 
+0.3.7 (14.10.2026)
+------------------
+- The AmiDrive window as wide as its buttons (the drawer below it too),
+  shorter progress texts ("57% file", "3.8 MB/18.3 MB 150 KB/s ~2 min"),
+  redrawn without flicker.
+
 0.3.6 (14.10.2026)
 ------------------
 - The AmiDrive window at the top left, the drawer with the files below it,

@@ -15,10 +15,11 @@
 #include "amidrive.h"
 #include "status_amiga.h"
 
-#define WIN_WIDTH 300                   /* inner width */
 #define MARGIN    8
 #define BUTTON_W  70
 #define BUTTON_GAP 6
+/* inner width: as wide as the buttons (the bar and the text use the same width) */
+#define WIN_WIDTH (3 * BUTTON_W + 2 * BUTTON_GAP + 2 * MARGIN)
 #define WIN_LEFT  64                    /* top left, beside the column of disk icons */
 
 enum { GID_SYNC = 1, GID_STOP, GID_HIDE };
@@ -41,20 +42,31 @@ static UWORD pen(int which, UWORD fallback)
     return dri && which < dri->dri_NumPens ? dri->dri_Pens[which] : fallback;
 }
 
-/* one line of text, cut to the width */
-static void text_at(struct RastPort *rp, int x, int y, int width, const char *s)
+/* one line of text, cut to the width; the rest of the line cleared (no flicker:
+ * nothing is erased before it is drawn again) */
+static void text_at(struct RastPort *rp, int x, int y, int width, const char *s, UWORD fg)
 {
     struct TextExtent te;
     ULONG n = TextFit(rp, (STRPTR)s, (ULONG)strlen(s), &te, NULL, 1, (WORD)width, 32767);
+    int end;
 
+    SetAPen(rp, fg);
+    SetBPen(rp, pen(BACKGROUNDPEN, 0));
+    SetDrMd(rp, JAM2);
     Move(rp, (WORD)x, (WORD)(y + rp->TxBaseline));
     Text(rp, (STRPTR)s, n);
+    end = rp->cp_x;
+    if (end < x + width) {
+        SetAPen(rp, pen(BACKGROUNDPEN, 0));
+        RectFill(rp, (WORD)end, (WORD)y, (WORD)(x + width - 1), (WORD)(y + rp->TxHeight - 1));
+    }
 }
 
-static void redraw(void)
+/* full: also the background and the frame of the bar (a new window) */
+static void redraw_all(int full)
 {
     struct RastPort *rp;
-    int x0, x1, y, fh, w;
+    int x0, x1, y, fh, w, fill;
 
     if (!win)
         return;
@@ -65,35 +77,42 @@ static void redraw(void)
     w = x1 - x0 + 1;
     y = win->BorderTop + 6;
 
-    SetAPen(rp, pen(BACKGROUNDPEN, 0));             /* the text area only: not the buttons */
-    RectFill(rp, win->BorderLeft, win->BorderTop, win->Width - win->BorderRight - 1, text_bottom);
-    SetDrMd(rp, JAM1);
-
-    SetAPen(rp, pen(HIGHLIGHTTEXTPEN, 2));
-    text_at(rp, x0, y, w, lines[0]);
+    if (full) {
+        SetAPen(rp, pen(BACKGROUNDPEN, 0));         /* the text area only: not the buttons */
+        RectFill(rp, win->BorderLeft, win->BorderTop, win->Width - win->BorderRight - 1, text_bottom);
+    }
+    text_at(rp, x0, y, w, lines[0], pen(HIGHLIGHTTEXTPEN, 2));
     y += fh + 5;
 
-    /* the bar: a recessed frame, filled up to percent */
-    SetAPen(rp, pen(SHADOWPEN, 1));
-    Move(rp, (WORD)x0, (WORD)(y + fh + 3));
-    Draw(rp, (WORD)x0, (WORD)y);
-    Draw(rp, (WORD)x1, (WORD)y);
-    SetAPen(rp, pen(SHINEPEN, 2));
-    Draw(rp, (WORD)x1, (WORD)(y + fh + 3));
-    Draw(rp, (WORD)(x0 + 1), (WORD)(y + fh + 3));
-    if (percent > 0) {
-        int fill = (w - 4) * (percent > 100 ? 100 : percent) / 100;
-        if (fill > 0) {
-            SetAPen(rp, pen(FILLPEN, 3));
-            RectFill(rp, (WORD)(x0 + 2), (WORD)(y + 2), (WORD)(x0 + 1 + fill), (WORD)(y + fh + 1));
-        }
+    /* the bar: a recessed frame, filled up to percent, the rest cleared */
+    if (full) {
+        SetAPen(rp, pen(SHADOWPEN, 1));
+        Move(rp, (WORD)x0, (WORD)(y + fh + 3));
+        Draw(rp, (WORD)x0, (WORD)y);
+        Draw(rp, (WORD)x1, (WORD)y);
+        SetAPen(rp, pen(SHINEPEN, 2));
+        Draw(rp, (WORD)x1, (WORD)(y + fh + 3));
+        Draw(rp, (WORD)(x0 + 1), (WORD)(y + fh + 3));
+    }
+    fill = percent > 0 ? (w - 4) * (percent > 100 ? 100 : percent) / 100 : 0;
+    if (fill > 0) {
+        SetAPen(rp, pen(FILLPEN, 3));
+        RectFill(rp, (WORD)(x0 + 2), (WORD)(y + 2), (WORD)(x0 + 1 + fill), (WORD)(y + fh + 1));
+    }
+    if (fill < w - 4) {
+        SetAPen(rp, pen(BACKGROUNDPEN, 0));
+        RectFill(rp, (WORD)(x0 + 2 + fill), (WORD)(y + 2), (WORD)(x1 - 2), (WORD)(y + fh + 1));
     }
     y += fh + 9;
 
-    SetAPen(rp, pen(TEXTPEN, 1));
-    text_at(rp, x0, y, w, lines[1]);
+    text_at(rp, x0, y, w, lines[1], pen(TEXTPEN, 1));
     y += fh + 3;
-    text_at(rp, x0, y, w, lines[2]);
+    text_at(rp, x0, y, w, lines[2], pen(TEXTPEN, 1));
+}
+
+static void redraw(void)
+{
+    redraw_all(0);
 }
 
 /* the three buttons under the text */
@@ -194,7 +213,7 @@ int status_open(void)
         dri = GetScreenDrawInfo(scr);
         SetFont(win->RPort, scr->RastPort.Font);
         GT_RefreshWindow(win, NULL);
-        redraw();
+        redraw_all(1);
     }
     UnlockPubScreen(NULL, scr);
     if (!win)
