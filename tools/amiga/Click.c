@@ -6,6 +6,7 @@
  *   Click X Y RIGHT           right button pressed at X Y, then held while moving to
  *                             TOX TOY and released there (menus: Click X Y RIGHT TOX=.. TOY=..)
  *   Click X Y DRAG TOX=.. TOY=..   left button drag (e.g. an icon onto another)
+ *   HOLD=n                    keep the right button pressed n seconds (screenshot of a menu)
  *
  * Build: vc +aos68k_win -c99 -cpu=68020 -O1 -I<NDK>/Include_H tools/amiga/Click.c -o build/amiga/Click -lamiga
  */
@@ -65,8 +66,8 @@ static void button(UWORD code)
 
 int main(void)
 {
-    LONG args[7] = { 0 };
-    struct RDArgs *rda = ReadArgs((STRPTR)"X/N/A,Y/N/A,DOUBLE/S,RIGHT/S,DRAG/S,TOX/K/N,TOY/K/N", args, NULL);
+    LONG args[8] = { 0 };
+    struct RDArgs *rda = ReadArgs((STRPTR)"X/N/A,Y/N/A,DOUBLE/S,RIGHT/S,DRAG/S,TOX/K/N,TOY/K/N,HOLD/K/N", args, NULL);
     struct MsgPort *port = NULL;
     int rc = RETURN_FAIL;
     WORD x, y, tx, ty;
@@ -90,7 +91,7 @@ int main(void)
                 button(IECODE_RBUTTON);
                 Delay(10);
                 move_to(tx, ty);
-                Delay(5);
+                Delay(args[7] ? *(LONG *)args[7] * 50 : 5);
                 button(IECODE_RBUTTON | IECODE_UP_PREFIX);
             } else if (args[4]) {                   /* drag */
                 button(IECODE_LBUTTON);

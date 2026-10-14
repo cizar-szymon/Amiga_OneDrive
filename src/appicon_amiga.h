@@ -1,6 +1,7 @@
 /* The "OneDrive" icon on the Workbench while AmiDrive synchronises in the background
  * (AppIcon of workbench.library):
  *   double-click            opens the synchronised directory (OS 3.5+, workbench.library 44)
+ *                           and asks for the status window (APPICON_STATUS)
  *   files dropped on it     are copied into it (C:Copy ALL CLONE), then synchronised at once
  *   Tools menu              "AmiDrive: status", "AmiDrive: synchronise now", "AmiDrive: stop"
  * During a pass appicon_poll() opens the drawer and answers the menu at once; dropped

@@ -203,8 +203,10 @@ int appicon_handle(void)
         } else if (am->am_Type == AMTYPE_APPICON) {
             if (am->am_NumArgs == 0) {
                 /* before V44 am_Class is 0 = AMCLASSICON_Open too */
-                if (am->am_Class == AMCLASSICON_Open)
+                if (am->am_Class == AMCLASSICON_Open) {
                     open_drawer();
+                    r |= APPICON_STATUS;    /* and the window with the buttons */
+                }
             } else {
                 for (i = 0; i < am->am_NumArgs; i++)
                     if (copy_in(&am->am_ArgList[i]))

@@ -716,7 +716,7 @@ static void show_idle(void)
     if (next_check) {
         tz_format_iso8601(next_check, t);
         t[16] = '\0';
-        sprintf(l3, "Next check at %s (or Tools > AmiDrive: synchronise now)", t + 11);
+        sprintf(l3, "Next check at %s", t + 11);
     } else {
         l3[0] = '\0';
     }
@@ -803,7 +803,8 @@ static void sync_progress(void *ud, const SyncProgress *p)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);       /* the pass ends at the next check */
     if (r & APPICON_STATUS)
         force |= status_open();
-    status_handle();
+    if (status_handle() & STATUS_STOP)                  /* "Synchronise now": running already */
+        Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
 
     /* a long first listing: show the window once by itself (closed: stays closed) */
     if (!pg.auto_shown && p->total && cfg.appicon[0] == 'Y' && ticks_since(&pg.pass_start) >= 500) {
@@ -836,6 +837,7 @@ static void pass_ends(int rc, const SyncStats *ss, const char *err, int once)
                 ss->downloaded, ss->uploaded, changes - ss->downloaded - ss->uploaded,
                 ss->failed ? ", some failed" : "");
     next_check = once ? 0 : plat_local_now() + (unsigned long)cfg.interval * 60;
+    status_busy(0);
     show_idle();
 }
 
@@ -845,6 +847,7 @@ static void pass_begins(void)
     DateStamp(&pg.pass_start);
     pg.phase_start = pg.pass_start;
     next_check = 0;
+    status_busy(1);
     if (status_is_open())
         status_show("Getting the changes from OneDrive", "Connecting ...", "", -1);
 }
@@ -869,8 +872,13 @@ static int wait_next(long secs)
             if ((r & APPICON_STATUS) && status_open())
                 show_idle();
         }
-        if ((wsig = status_signal()) != 0 && (SetSignal(0, wsig) & wsig))
-            status_handle();
+        if ((wsig = status_signal()) != 0 && (SetSignal(0, wsig) & wsig)) {
+            r = status_handle();
+            if (r & STATUS_STOP)
+                return AD_ERR_BREAK;
+            if (r & STATUS_SYNC)
+                return AD_OK;
+        }
         if (steps-- <= 0)
             return AD_OK;
         Delay(TICKS_PER_SECOND / 5);

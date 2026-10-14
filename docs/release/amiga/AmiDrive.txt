@@ -1,4 +1,4 @@
-AmiDrive 0.3.2 - klient OneDrive dla AmigaOS 3.x
+AmiDrive 0.3.3 - klient OneDrive dla AmigaOS 3.x
 ================================================
 
 AmiDrive synchronizuje JEDEN wybrany folder z OneDrive z szufladą na dysku
@@ -46,15 +46,20 @@ AmiDrive pracuje w tle bez okna i co kilka minut sprawdza zmiany. Okno
 pojawia się tylko przy błędzie albo logowaniu.
 
 Ikona "OneDrive" na pulpicie (gdy AmiDrive działa):
-  dwuklik             otwiera szufladę z plikami (AmigaOS 3.5 lub nowszy),
-                      także w trakcie synchronizacji - wtedy pokazuje się
-                      też okno postępu
+  dwuklik             otwiera szufladę z plikami (AmigaOS 3.5 lub nowszy)
+                      i okno AmiDrive z przyciskami - od razu, także
+                      w trakcie synchronizacji
   upuszczone pliki    są kopiowane do szuflady i od razu wysyłane (w trakcie
                       synchronizacji: zaraz po jej zakończeniu)
   menu Narzędzia      "AmiDrive: status", "AmiDrive: synchronise now"
                       i "AmiDrive: stop"
 
-Okno postępu ("AmiDrive - OneDrive"): co się dzieje, pasek postępu
+Okno AmiDrive ("AmiDrive - OneDrive") ma przyciski "Synchronise now"
+(synchronizuj teraz; wyszarzony w trakcie), "Stop AmiDrive" (koniec pracy
+w tle, ikona znika) i "Hide" (ukryj okno). Workbench 3.2 nie ma menu ikon
+pod prawym przyciskiem - te same polecenia są też w menu Tools.
+
+W trakcie synchronizacji okno pokazuje: co się dzieje, pasek postępu
 z procentami, bieżący plik, ile już pobrano / wysłano, prędkość i szacowany
 czas do końca. Procent całości jest znany przy pierwszej synchronizacji
 (rozmiar folderu w OneDrive) i przy wysyłaniu; przy zwykłych zmianach pasek

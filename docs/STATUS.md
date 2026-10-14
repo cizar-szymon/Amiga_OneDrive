@@ -32,6 +32,7 @@
 | Instalator (`install/Install-AmiDrive`, Installer 47) i paczka `releases/amiga/AmiDrive-0.3.0.lha` (`tools/make_release.py --lha`) | ✅ A1200: aktualizacja na prawdziwo (EN), nowa instalacja w trybie symulacji (PL) |
 | Zegar Amigi: czas z nagłówka `Date` serwera Graph (TLS z weryfikacją łańcucha i nazwy, bez dat), okno „Set clock / Always set automatically / Cancel”, `CLOCK=ASK\|AUTO\|NO`, `SETCLOCK`, pytanie w instalatorze (0.3.1) | ✅ testy + A1200 |
 | Okno postępu (0.3.2): `SyncProgress` w `sync.c` (faza, plik, bajty, całość przy pełnej liście i wysyłaniu), okno z paskiem, prędkością i czasem do końca, stan między przejściami; ikona i menu obsługiwane w trakcie przejścia | ✅ testy + A1200 |
+| Przyciski w oknie AmiDrive (0.3.3): „Synchronise now” (wyszarzony w trakcie), „Stop AmiDrive”, „Hide” (GadTools); dwuklik na OneDrive zawsze otwiera szufladę i okno | ✅ A1200 |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
@@ -116,6 +117,12 @@
   + okno „Getting the changes from OneDrive: 5 %”, plik 672 KB z 3,5 MB, 695 KB z 8,9 MB,
   41 KB/s, „about 3 min left”; po końcu okno samo przeszło w „Up to date”, wynik i godzina
   następnego sprawdzenia.
+- A1200, przyciski (14.10.2026, 0.3.3; prośba: „prawy przycisk na ikonie: stop, synchronizuj
+  teraz”): Workbench 3.2 nie ma menu kontekstowego ikon (prawy przycisk zawsze pokazuje pasek
+  menu; programy mogą dodać tylko pozycje do Tools – są tam), więc wybrany wariant: przyciski
+  w oknie. Dwuklik w czasie czekania → szuflada + okno; „Synchronise now” → przejście
+  (przycisk wyszarzony w trakcie), potem „Up to date”; „Stop AmiDrive” → program zakończony,
+  ikona zniknęła.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
