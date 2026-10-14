@@ -10,7 +10,7 @@
 ; the settings are saved by AmiDrive itself (ENVARC:AmiDrive/AmiDrive.prefs).
 
 (set #pl (= @language "polski"))
-(set #version "0.3.8")
+(set #version "0.3.9")
 
 (if (< (/ @installer-version 65536) 43)
   (abort "Installer 43 or newer is needed (AmigaOS 3.1.4 / 3.2 / 3.9)."))
@@ -301,8 +301,8 @@
   (if #pl
     (cat "AmiDrive został zainstalowany w " #progdir ".\n\n"
          "Ustawienia: ENVARC:AmiDrive/AmiDrive.prefs\nOpis: " #progdir "/AmiDrive.txt\n\n"
-         "Zatrzymanie: menu Narzędzia > AmiDrive: stop albo w Shellu \"AmiDrive STOP\".")
+         "Zakończenie: przycisk Quit, menu Narzędzia > AmiDrive: quit albo w Shellu \"AmiDrive STOP\".")
     (cat "AmiDrive has been installed in " #progdir ".\n\n"
          "Settings: ENVARC:AmiDrive/AmiDrive.prefs\nManual: " #progdir "/AmiDrive_en.txt\n\n"
-         "To stop it: Tools menu > AmiDrive: stop, or \"AmiDrive STOP\" in a Shell."))
+         "To quit it: the Quit button, Tools menu > AmiDrive: quit, or \"AmiDrive STOP\" in a Shell."))
   (quiet))

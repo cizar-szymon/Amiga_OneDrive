@@ -22,7 +22,7 @@
 #define WIN_WIDTH (3 * BUTTON_W + 2 * BUTTON_GAP + 2 * MARGIN)
 #define WIN_LEFT  64                    /* top left, beside the column of disk icons */
 
-enum { GID_SYNC = 1, GID_STOP, GID_HIDE };
+enum { GID_SYNC = 1, GID_STOP, GID_QUIT };
 
 struct IntuitionBase *IntuitionBase;
 struct GfxBase *GfxBase;
@@ -118,7 +118,7 @@ static void redraw(void)
 /* the three buttons under the text */
 static struct Gadget *make_buttons(struct Screen *scr, int top, int fh)
 {
-    static const char *const labels[3] = { "Sync now", "Stop", "Hide" };
+    static const char *const labels[3] = { "Sync now", "Stop", "Quit" };
     struct NewGadget ng;
     struct Gadget *g;
     int i, x0 = (WIN_WIDTH - 3 * BUTTON_W - 2 * BUTTON_GAP) / 2;    /* centred, close together */
@@ -269,14 +269,14 @@ int status_handle(void)
             r |= STATUS_CLOSED;
         } else if (im->Class == IDCMP_GADGETUP) {
             UWORD id = ((struct Gadget *)im->IAddress)->GadgetID;
-            r |= id == GID_SYNC ? STATUS_SYNC : id == GID_STOP ? STATUS_STOP : STATUS_CLOSED;
+            r |= id == GID_SYNC ? STATUS_SYNC : id == GID_STOP ? STATUS_STOP : STATUS_QUIT;
         } else if (im->Class == IDCMP_REFRESHWINDOW) {
             GT_BeginRefresh(win);
             GT_EndRefresh(win, TRUE);
         }
         GT_ReplyIMsg(im);
     }
-    if (r & (STATUS_CLOSED | STATUS_STOP))
+    if (r & (STATUS_CLOSED | STATUS_QUIT))
         status_close();
     return r;
 }

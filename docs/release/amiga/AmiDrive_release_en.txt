@@ -5,6 +5,13 @@ Reporting bugs: give the version (in a Shell: Version AmiDrive) and attach
 the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
 
 
+0.3.9 (14.10.2026)
+------------------
+- Buttons "Sync now", "Stop", "Quit": Stop stops the synchronisation (paused
+  until "Sync now"), Quit ends the program; closing the window hides it.
+  Tools menu: "AmiDrive: quit".
+- The check result names only what changed, e.g. "20 deleted".
+
 0.3.8 (14.10.2026)
 ------------------
 - The drawer with the files always right below the AmiDrive window, as wide

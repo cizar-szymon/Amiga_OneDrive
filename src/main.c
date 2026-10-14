@@ -661,6 +661,8 @@ static struct {
     long last_draw;                     /* ticks since phase_start */
 } pg;
 static char last_result[120];           /* "12:31 no changes", for the idle window */
+static int paused;                      /* "Stop": no automatic checks until "Sync now" */
+static int stop_pass;                   /* "Stop" pressed during a pass: end it, go on */
 static unsigned long next_check;        /* local time of the next pass, 0 = none */
 
 /* 1234 -> "1234 bytes", "880 KB", "12.3 MB" */
@@ -716,6 +718,10 @@ static void show_idle(void)
     if (!status_is_open())
         return;
     sprintf(l2, "Last check %s", last_result[0] ? last_result : "-");
+    if (paused) {
+        status_show("Paused", l2, "Sync now continues", -1);
+        return;
+    }
     if (next_check) {
         tz_format_iso8601(next_check, t);
         t[16] = '\0';
@@ -809,7 +815,12 @@ static void sync_progress(void *ud, const SyncProgress *p)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);       /* the pass ends at the next check */
     if (r & APPICON_STATUS)
         force |= status_open();
-    if (status_handle() & STATUS_STOP)                  /* "Synchronise now": running already */
+    r = status_handle();                                /* "Sync now": running already */
+    if (r & STATUS_STOP) {                              /* end this pass, then pause */
+        stop_pass = paused = 1;
+        Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
+    }
+    if (r & STATUS_QUIT)
         Signal(FindTask(NULL), SIGBREAKF_CTRL_C);
 
     /* a long first listing: show the window once by itself (closed: stays closed) */
@@ -834,14 +845,30 @@ static void pass_ends(int rc, const SyncStats *ss, const char *err, int once)
 
     tz_format_iso8601(plat_local_now(), t);
     t[16] = '\0';
-    if (rc != AD_OK)
+    if (rc == AD_ERR_BREAK && stop_pass)
+        sprintf(last_result, "%s stopped", t + 11);
+    else if (rc != AD_OK)
         sprintf(last_result, "%s stopped: %.80s", t + 11, rc == AD_ERR_BREAK ? "interrupted" : err);
     else if (!changes)
         sprintf(last_result, "%s no changes%s", t + 11, ss->failed ? " (some failed, tried again)" : "");
-    else
-        sprintf(last_result, "%s %ld downloaded, %ld sent, %ld other changes%s", t + 11,
-                ss->downloaded, ss->uploaded, changes - ss->downloaded - ss->uploaded,
-                ss->failed ? ", some failed" : "");
+    else {                              /* only what happened: "3 downloaded, 20 deleted" */
+        static const char *const what[5] = { "downloaded", "sent", "deleted", "moved", "new folders" };
+        long n[5];
+        int i;
+
+        n[0] = ss->downloaded;
+        n[1] = ss->uploaded;
+        n[2] = ss->deleted + ss->remote_deleted;
+        n[3] = ss->moved + ss->remote_moved;
+        n[4] = ss->folders + ss->remote_folders;
+        strcpy(last_result, t + 11);
+        for (i = 0; i < 5; i++)
+            if (n[i])
+                sprintf(last_result + strlen(last_result), "%s %ld %s", i && strchr(last_result, ' ') ?
+                        "," : "", n[i], what[i]);
+        if (ss->failed)
+            strcat(last_result, ", some failed");
+    }
     next_check = once ? 0 : plat_local_now() + (unsigned long)cfg.interval * 60;
     status_busy(0);
     show_idle();
@@ -858,8 +885,8 @@ static void pass_begins(void)
         status_show("Checking OneDrive", "Connecting ...", "", -1);
 }
 
-/* Wait secs between passes. AD_OK: time is up or "synchronise now" (AppIcon menu or
- * files dropped on it); AD_ERR_BREAK: Ctrl-C or "stop". */
+/* Wait secs between passes (paused: until "Sync now"). AD_OK: time is up or "Sync now"
+ * (button, menu, files dropped on the icon); AD_ERR_BREAK: Ctrl-C or "Quit". */
 static int wait_next(long secs)
 {
     ULONG sig = appicon_signal(), wsig;
@@ -873,19 +900,28 @@ static int wait_next(long secs)
             r = appicon_handle();
             if (r & APPICON_STOP)
                 return AD_ERR_BREAK;
-            if (r & APPICON_SYNC)
+            if (r & APPICON_SYNC) {
+                paused = 0;
                 return AD_OK;
+            }
             if ((r & APPICON_STATUS) && status_open())
                 show_idle();
         }
         if ((wsig = status_signal()) != 0 && (SetSignal(0, wsig) & wsig)) {
             r = status_handle();
-            if (r & STATUS_STOP)
+            if (r & STATUS_QUIT)
                 return AD_ERR_BREAK;
-            if (r & STATUS_SYNC)
+            if (r & STATUS_SYNC) {
+                paused = 0;
                 return AD_OK;
+            }
+            if ((r & STATUS_STOP) && !paused) {
+                paused = 1;
+                note("Paused (Stop): no checks until Sync now\n");
+                show_idle();
+            }
         }
-        if (steps-- <= 0)
+        if (!paused && steps-- <= 0)
             return AD_OK;
         Delay(TICKS_PER_SECOND / 5);
     }
@@ -982,6 +1018,22 @@ static int cmd_sync(int once)
         pass_begins();
         rc = sync_run(&sc, &state, &ss, err, sizeof(err));
         pass_ends(rc, &ss, err, once);
+        if (stop_pass && rc != AD_ERR_BREAK) {        /* "Stop" at the very end: just pause */
+            stop_pass = 0;
+            SetSignal(0, SIGBREAKF_CTRL_C);
+        }
+        if (rc == AD_ERR_BREAK && stop_pass) {        /* "Stop": this pass only, then paused */
+            stop_pass = 0;
+            SetSignal(0, SIGBREAKF_CTRL_C);
+            note("  Stopped (Stop): paused until Sync now\n");
+            sess_close(&graph_sess);
+            sess_close(&dl_sess);
+            sess_close(&login_sess);
+            log_close();
+            if (wait_next(0) != AD_OK)
+                break;                  /* Quit */
+            continue;
+        }
         /* the connections are not kept for minutes of waiting */
         sess_close(&graph_sess);
         sess_close(&dl_sess);

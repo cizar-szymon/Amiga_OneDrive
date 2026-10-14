@@ -126,7 +126,7 @@ int appicon_open(const char *label, const char *local, const char *progname,
     drawer_icon();
     menu_status = AddAppMenuItemA(MENU_STATUS, 0, (STRPTR)"AmiDrive: status", port, NULL);
     menu_sync = AddAppMenuItemA(MENU_SYNC, 0, (STRPTR)"AmiDrive: synchronise now", port, NULL);
-    menu_stop = AddAppMenuItemA(MENU_STOP, 0, (STRPTR)"AmiDrive: stop", port, NULL);
+    menu_stop = AddAppMenuItemA(MENU_STOP, 0, (STRPTR)"AmiDrive: quit", port, NULL);
     return 1;
 }
 

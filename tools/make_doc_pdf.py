@@ -101,7 +101,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Arial", 8)
     canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.8 – opis działania i instalacji")
+    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.3.9 – opis działania i instalacji")
     canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
     canvas.restoreState()
 
@@ -114,7 +114,7 @@ def content():
                  colWidths=[30 * mm, 140 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     s += [head, Spacer(1, 4),
-          P("Wersja programu 0.3.8, dokument z 14.10.2026.", small), Spacer(1, 6)]
+          P("Wersja programu 0.3.9, dokument z 14.10.2026.", small), Spacer(1, 6)]
 
     # ---------------------------------------------------------------- 1
     s.append(P("1. Czym jest AmiDrive", h1))
@@ -215,14 +215,14 @@ def content():
         "<b>dwuklik</b> otwiera synchronizowany katalog <font name='Consolas'>Work:OneDrive</font> "
         "(AmigaOS 3.5 lub nowszy; od 3.9/3.2 jako lista wszystkich plików według nazw) "
         "i <b>okno AmiDrive</b> z przyciskami <i>Sync now</i>, "
-        "<i>Stop</i> i <i>Hide</i> – od razu, także w trakcie synchronizacji; wtedy okno "
+        "<i>Stop</i> (pauza synchronizacji) i <i>Quit</i> (koniec programu) – od razu, także w trakcie synchronizacji; wtedy okno "
         "pokazuje postęp: pasek z procentami, bieżący plik, prędkość i szacowany czas do końca "
         "(Workbench 3.2 nie ma menu ikon pod prawym przyciskiem);",
         "<b>pliki i szuflady upuszczone na ikonę</b> są kopiowane do tego katalogu i od razu "
         "wysyłane do chmury;",
         "menu <i>Narzędzia</i>: <b>AmiDrive: status</b> (okno postępu albo wynik ostatniego "
         "sprawdzenia i godzina następnego), <b>AmiDrive: synchronise now</b> (przejście teraz) i "
-        "<b>AmiDrive: stop</b> (koniec pracy w tle, ikona znika).",
+        "<b>AmiDrive: quit</b> (koniec pracy w tle, ikona znika).",
     ])
     s.append(P("Workbench sam wybiera miejsce ikony (pierwsze wolne w kolumnie ikon – może być "
                "zasłonięte oknem). Bez ikony: <font name='Consolas'>APPICON=NO</font>."))
@@ -231,7 +231,7 @@ def content():
         ["Czynność", "Jak"],
         ["Uruchomić w tle", "Dwuklik na ikonie <i>AmiDrive</i> albo w Shellu: "
                             "<font name='Consolas'>Run &gt;NIL: Work:AmiDrive/AmiDrive</font>"],
-        ["Zatrzymać", "Menu <i>Narzędzia → AmiDrive: stop</i>, ponowny dwuklik na ikonie programu → "
+        ["Zakończyć", "Przycisk <i>Quit</i>, menu <i>Narzędzia → AmiDrive: quit</i>, ponowny dwuklik na ikonie programu → "
                       "<i>Stop</i>, albo w Shellu <font name='Consolas'>Work:AmiDrive/AmiDrive STOP</font>"],
         ["Jedno przejście teraz", "Menu <i>Narzędzia → AmiDrive: synchronise now</i> (gdy działa w tle), "
                                   "albo <font name='Consolas'>Work:AmiDrive/AmiDrive ONCE</font>"],

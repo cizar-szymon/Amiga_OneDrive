@@ -28,7 +28,7 @@ Technika: C (vbcc), `bsdsocket.library` (Roadshow), AmiSSL 5 (OpenSSL 3), własn
 z keep-alive, parser JSON jsmn, Microsoft Graph API (`/delta`, pobieranie, wysyłanie w sesjach).
 Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawem testów.
 
-**Stan (wersja 0.3.8):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
+**Stan (wersja 0.3.9):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
 (OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
 start z ikony, autostart z `WBStartup`, ikona „OneDrive” na pulpicie Workbencha.
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
@@ -83,11 +83,11 @@ Ponowne kliknięcie ikony pyta, czy zatrzymać.
 
 **Ikona „OneDrive” na pulpicie (AppIcon):** dopóki AmiDrive pracuje w tle, na pulpicie
 Workbencha jest ikona „OneDrive”. Dwuklik otwiera synchronizowany katalog (OS 3.5+) i okno
-AmiDrive z przyciskami „Sync now”, „Stop”, „Hide” (także w trakcie
+AmiDrive z przyciskami „Sync now”, „Stop” (pauza), „Quit” (także w trakcie
 synchronizacji – wtedy z postępem, procentami i czasem do końca; Workbench 3.2 nie ma menu ikon
 pod prawym przyciskiem), pliki
 i szuflady upuszczone na ikonę są kopiowane do niego (`C:Copy ALL CLONE`) i od razu wysyłane,
-a menu *Narzędzia* ma pozycje „AmiDrive: synchronise now” i „AmiDrive: stop”.
+a menu *Narzędzia* ma pozycje „AmiDrive: status”, „AmiDrive: synchronise now” i „AmiDrive: quit”.
 
 **Autostart:** ikona projektu `SYS:WBStartup/AmiDrive.info` (z plikiem `AmiDrive` obok) ma
 narzędzie domyślne `Work:AmiDrive/AmiDrive` i `DONOTWAIT` – Workbench uruchamia przy starcie

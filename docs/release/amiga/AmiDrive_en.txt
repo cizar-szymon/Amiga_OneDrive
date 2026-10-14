@@ -1,4 +1,4 @@
-AmiDrive 0.3.8 - a OneDrive client for AmigaOS 3.x
+AmiDrive 0.3.9 - a OneDrive client for AmigaOS 3.x
 ==================================================
 
 AmiDrive synchronises ONE chosen OneDrive folder with a drawer on the Amiga,
@@ -52,15 +52,19 @@ The "OneDrive" icon on the Workbench (while AmiDrive runs):
   files dropped on it are copied into the drawer and sent at once (during a
                       synchronisation: right after it)
   Tools menu          "AmiDrive: status", "AmiDrive: synchronise now"
-                      and "AmiDrive: stop"
+                      and "AmiDrive: quit"
 
 The drawer with the files always opens right below the AmiDrive window, as
 wide, showing all files by name (AmiDrive sets this in the drawer's icon
 before each opening; the icon's image and place are kept).
 
-The AmiDrive window ("AmiDrive - OneDrive") has the buttons "Sync now"
-(disabled while one runs), "Stop" (ends the background work, the icon goes
-away) and "Hide". Workbench 3.2 has no right-button menus for
+The AmiDrive window ("AmiDrive - OneDrive") has the buttons:
+  Sync now   synchronise now (disabled while one runs; also ends a pause)
+  Stop       stops the synchronisation: ends a running one and pauses the
+             checks ("Paused") until "Sync now"; AmiDrive keeps running
+  Quit       ends AmiDrive (the OneDrive icon goes away; again: the program
+             icon, or autostart the next time the Amiga starts)
+The close gadget only hides the window. Workbench 3.2 has no right-button menus for
 icons - the same commands are in the Tools menu as well.
 
 During a synchronisation the window shows what is being done, a bar with
@@ -75,7 +79,7 @@ AmiDrive.
 In a Shell:
   AmiDrive                   work in the background
   AmiDrive ONCE              one pass
-  AmiDrive STOP              stop the AmiDrive running in the background
+  AmiDrive STOP              end the AmiDrive running in the background (as Quit)
   AmiDrive INFO              settings, sign-in, OneDrive space
   AmiDrive LOGIN / LOGOUT    sign in / delete the token
   AmiDrive TEST              clock, time zone, DNS, TLS, connection
