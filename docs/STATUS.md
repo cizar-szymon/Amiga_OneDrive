@@ -21,7 +21,7 @@
 | `LOGIN`, `LOGOUT`, `INFO` (właściciel i zajętość OneDrive) | ✅ A1200, konto firmowe (OneDrive for Business) |
 | `graph.c`: `/me/drive` | ✅ testy |
 | `graph.c`: element po ścieżce, delta i children stronami (`nextLink`/`deltaLink`), pobieranie strumieniowe (302 → serwer plików), ponowienia 429/5xx, 404/410 | ✅ testy + A1200 (atrapy), ⏳ prawdziwe konto |
-| Start z ikony (Tool Types, `WINDOW`, logowanie w oknie, pytanie o zatrzymanie), dziennik `.AmiDrive/AmiDrive.log`, jedna synchronizacja naraz, `STOP`, ikona `AmiDrive.info` | ✅ A1200 (`WBRun`); ⏳ ponowny test logowania z ikony po poprawce `net_init` |
+| Start z ikony (Tool Types, `WINDOW`, logowanie w oknie, pytanie o zatrzymanie), dziennik `.AmiDrive/AmiDrive.log`, jedna synchronizacja naraz, `STOP`, ikona `AmiDrive.info` | ✅ A1200 (`WBRun`), także logowanie z ikony po poprawce `net_init` |
 | `state.c`: baza stanu po `id` (ścieżki z łańcucha rodziców), plik tekstowy zapisywany strumieniowo do `.new` i podmieniany, linia końcowa | ✅ testy + A1200 (`AmiDrive TEST` zapisuje i czyta stan w `T:`) |
 | `plat`: strumieniowe pliki (`plat_open_read/write`, `plat_close` z podmianą) | ✅ A1200 |
 | `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki, usuwanie, zmiana nazwy, podfolder, 3 poziomy folderów, przeniesienia plików i folderów, zmiana nazwy folderu, nazwa > 30 znaków, przeniesienie poza folder) |
@@ -80,7 +80,9 @@
   - start z ikony bez tokenu: logowanie w oknie, potem synchronizacja – **padło** („Memory header
     not located”): `cmd_login` i `cmd_sync` wywoływały `net_init()` dwa razy (druga inicjalizacja
     AmiSSL w tym samym procesie, połączenie z pierwszej). Poprawione: drugie wywołanie nic nie robi.
-    Ponowny test do zrobienia (wymaga zalogowania).
+    Po poprawce (prawdziwa ikona `Work:AmiDrive/AmiDrive`, Tool Types wyłączone): kod w oknie,
+    logowanie, przejście „no changes” tylko w dzienniku, dalej praca w tle; kopia z Shella
+    „already running”.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
