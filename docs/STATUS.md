@@ -29,6 +29,7 @@
 | `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ A1200: `ONCE` i praca w tle (`INTERVAL=1`, zmiany wykryte w kolejnych cyklach, Ctrl-C w czasie czekania) |
 | Ikona „OneDrive” na pulpicie (AppIcon): dwuklik otwiera katalog, upuszczone pliki kopiowane i wysyłane, menu Narzędzia „synchronise now” / „stop”, `APPICON=YES\|NO` | ✅ A1200: ikona dodawana i zdejmowana; ⏳ dwuklik, upuszczanie, menu (wymaga myszy) |
 | Autostart: ikona projektu `SystemSD:WBStartup/AmiDrive.info` + plik `AmiDrive` (narzędzie domyślne `Work:AmiDrive/AmiDrive`, `DONOTWAIT`) | ✅ A1200: otwarcie ikony uruchamia AmiDrive w tle; restart (`C:Reboot`, 14.10.2026): AmiDrive wystartował sam, ikona „OneDrive” na pulpicie, przejście „no changes” |
+| Instalator (`install/Install-AmiDrive`, Installer 47) i paczka `releases/amiga/AmiDrive-0.3.0.lha` (`tools/make_release.py --lha`) | ✅ A1200: aktualizacja na prawdziwo (EN), nowa instalacja w trybie symulacji (PL) |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
@@ -85,6 +86,19 @@
     Po poprawce (prawdziwa ikona `Work:AmiDrive/AmiDrive`, Tool Types wyłączone): kod w oknie,
     logowanie, przejście „no changes” tylko w dzienniku, dalej praca w tle; kopia z Shella
     „already running”.
+- A1200, instalator (14.10.2026, sterowany zdalnie programem `tools/amiga/Click.c`):
+  - aktualizacja na prawdziwo, Workbench po angielsku: `Work:` → `AmiDrive STOP` (dziennik:
+    „Stopped”), kopiowanie programu i opisów, „Keep” ustawień, TZ pominięte (ustawione),
+    autostart (ikona w `SYS:WBStartup` z narzędziem `Work:AmiDrive/AmiDrive`), „Start” →
+    `openwbobject` uruchomił AmiDrive (ikona „OneDrive”, przejście „no changes”);
+  - błąd znaleziony: opisy kopiowane bez ikon (wzorzec `#?.(txt|pdf)`) → teraz `(all)`;
+  - nowa instalacja po polsku (`LANGUAGE=polski`) w trybie symulacji: wszystkie pytania
+    (katalog plików, nazwa, folder OneDrive, Latin-2, minuty, kierunek, ikona, autostart,
+    start), ustawienia i `WBStartup` bez zmian; polecenie zapisu ustawień sprawdzone ręcznie;
+  - Installer z Shella spoza swojej szuflady nie widzi plików paczki → teraz czytelny
+    komunikat na początku (z ikony katalogiem bieżącym jest szuflada paczki);
+  - czcionka Workbencha na A1200 nie ma części liter Latin-2 (krzaki także w tekstach
+    samego Installera) – sprawa czcionki systemu, nie skryptu.
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,

@@ -7,6 +7,9 @@
   python tools/make_icon.py WBStartup.info --project Work:AmiDrive/AmiDrive --tooltypes DONOTWAIT
       a project icon for SYS:WBStartup that starts the program (no second copy of it)
 
+draw_doc() / draw_drawer() and save_icon(..., drawer=True) make the other icons of the
+release archive (tools/make_release.py).
+
 The icon has a classic 4 colour image (any Workbench) and an OS 3.5+ ColorIcon (FORM ICON
 with FACE and IMAG chunks, RLE compressed), which AmigaOS 3.2 shows. Stack 65536 bytes
 (OpenSSL needs it). Copied from the Vastar port's icon tool.
@@ -123,13 +126,46 @@ def draw(w=46, h=34):
     return img
 
 
-def disk_object(rgb, w, h, types, default_tool=None):
-    """a tool icon, or with default_tool a project icon that starts that program"""
+def draw_doc(w=30, h=34):
+    """a text page with a folded corner (documentation)"""
+    from PIL import ImageDraw
+    grey, black, white, blue = WB4
+    img = Image.new("RGB", (w, h), grey)
+    d = ImageDraw.Draw(img)
+    d.polygon([(3, 1), (19, 1), (26, 8), (26, 32), (3, 32)], fill=white, outline=black)
+    d.polygon([(19, 1), (19, 8), (26, 8)], fill=grey, outline=black)
+    for y in range(12, 30, 4):
+        d.line((7, y, 22, y), fill=blue)
+    return img
+
+
+def draw_drawer(w=46, h=30):
+    """a drawer (folder) with the cloud's blue"""
+    from PIL import ImageDraw
+    grey, black, white, blue = WB4
+    img = Image.new("RGB", (w, h), grey)
+    d = ImageDraw.Draw(img)
+    d.rectangle((3, 4, 18, 9), fill=blue, outline=black)
+    d.rectangle((3, 8, 42, 27), fill=blue, outline=black)
+    d.line((5, 11, 40, 11), fill=white)
+    return img
+
+
+# old DrawerData: struct NewWindow (the drawer window) + dd_CurrentX/Y
+DRAWER_DATA = struct.pack(">hhhhBBIIIIIIIhhhhH", 60, 40, 420, 180, 255, 255, 0, 0,
+                          0, 0, 0, 0, 0, 90, 40, -1, -1, 1) + struct.pack(">ii", 0, 0)
+
+
+def disk_object(rgb, w, h, types, default_tool=None, drawer=False):
+    """a tool icon, with default_tool a project icon that starts that program, or a drawer"""
     gadget = struct.pack(">IhhhhHHHIIIIIHI", 0, 0, 0, w, h + 1, 0x0004, 0x0003, 0x0001,
                          1, 0, 0, 0, 0, 0, 1)
+    kind = 2 if drawer else 4 if default_tool else 3        # WBDRAWER, WBPROJECT, WBTOOL
     head = struct.pack(">HH", 0xE310, 1) + gadget + struct.pack(
-        ">BBIIiiIII", 4 if default_tool else 3, 0, 1 if default_tool else 0, 1 if types else 0,
-        -0x80000000, -0x80000000, 0, 0, STACK)
+        ">BBIIiiIII", kind, 0, 1 if default_tool else 0, 1 if types else 0,
+        -0x80000000, -0x80000000, 1 if drawer else 0, 0, 0 if drawer else STACK)
+    if drawer:
+        head += DRAWER_DATA
     image = struct.pack(">hhhhhIBBI", 0, 0, w, h, 2, 1, 3, 0, 0) + planar(rgb, w, h)
     tool = b""
     if default_tool:
@@ -139,8 +175,15 @@ def disk_object(rgb, w, h, types, default_tool=None):
     if len(colors) > 256:
         raise SystemExit("more than 256 colours")
     remap = {c: i for i, c in enumerate(colors)}
-    return head + image + tool + (tool_types(types) if types else b"") + \
+    tail = struct.pack(">IH", 0, 0) if drawer else b""        # OS 2 dd_Flags, dd_ViewModes
+    return head + image + tool + (tool_types(types) if types else b"") + tail + \
         color_icon([remap[c] for c in rgb], w, h, colors)
+
+
+def save_icon(path, img, types=(), default_tool=None, drawer=False):
+    w, h = img.size
+    rgb = list(img.convert("RGB").getdata())
+    open(path, "wb").write(disk_object(rgb, w, h, list(types), default_tool, drawer))
 
 
 def main():

@@ -1,0 +1,291 @@
+; Install-AmiDrive - Installer script for AmiDrive (OneDrive client for AmigaOS 3.x)
+;
+; Run from its icon (default tool Installer, APPNAME=AmiDrive, MINUSER=AVERAGE).
+; Texts in Polish when the Locale language is "polski", else in English. This file is
+; kept in UTF-8 in the repository; tools/make_release.py writes it in ISO-8859-2.
+;
+; Asks: where to install the program, where to keep the synchronised files, the OneDrive
+; folder, the character set, the interval, both ways or download only, the Workbench
+; icon, autostart from WBStartup and the time zone. A running AmiDrive is stopped first;
+; the settings are saved by AmiDrive itself (ENVARC:AmiDrive/AmiDrive.prefs).
+
+(set #pl (= @language "polski"))
+(set #version "0.3.0")
+
+(if (< (/ @installer-version 65536) 43)
+  (abort "Installer 43 or newer is needed (AmigaOS 3.1.4 / 3.2 / 3.9)."))
+(if (< (/ (getversion) 65536) 39)
+  (abort (if #pl "AmiDrive wymaga AmigaOS 3.0 lub nowszego." "AmiDrive needs AmigaOS 3.0 or newer.")))
+(if (= (database "cpu") "68000")
+  (abort (if #pl "AmiDrive wymaga procesora 68020 lub szybszego."
+                 "AmiDrive needs a 68020 or faster processor.")))
+
+; the files of the archive are found relative to the current directory: the drawer of
+; the icon from Workbench; from a Shell, CD into the drawer first
+(if (<> (exists "AmiDrive" (noreq)) 1)
+  (abort (if #pl (cat "Nie znaleziono plików instalacyjnych.\n\nUruchom instalator z ikony "
+                      "Install-AmiDrive albo w Shellu najpierw przejdź (CD) do jego szuflady.")
+                 (cat "The files to install were not found.\n\nStart the installer from the icon "
+                      "Install-AmiDrive, or in a Shell CD into its drawer first."))))
+
+(set @default-dest (if (exists "Work:" (noreq)) "Work:" "SYS:"))
+
+(welcome
+  (if #pl
+    (cat "AmiDrive " #version " - klient OneDrive dla Amigi.\n\n"
+         "Synchronizuje jeden folder z OneDrive z katalogiem na dysku Amigi, w obie strony.\n\n"
+         "Potrzebne: stos TCP/IP (np. Roadshow), AmiSSL 5.24 lub nowszy i konto Microsoft.")
+    (cat "AmiDrive " #version " - a OneDrive client for the Amiga.\n\n"
+         "It synchronises one OneDrive folder with a directory on the Amiga, both ways.\n\n"
+         "Needed: a TCP/IP stack (e.g. Roadshow), AmiSSL 5.24 or newer and a Microsoft account.")))
+
+; ---- requirements (warnings only: they may be installed later) -------------------
+
+(if (< (/ (getversion "LIBS:amisslmaster.library") 65536) 5)
+  (message
+    (if #pl
+      (cat "Nie znaleziono AmiSSL 5 (LIBS:amisslmaster.library).\n\n"
+           "AmiDrive potrzebuje AmiSSL 5.24 lub nowszego do połączeń szyfrowanych. "
+           "Zainstaluj go (Aminet: util/libs/AmiSSL-5.x) przed pierwszym uruchomieniem.")
+      (cat "AmiSSL 5 was not found (LIBS:amisslmaster.library).\n\n"
+           "AmiDrive needs AmiSSL 5.24 or newer for encrypted connections. "
+           "Install it (Aminet: util/libs/AmiSSL-5.x) before the first start."))))
+
+(if (= (getversion "bsdsocket.library" (resident)) 0)
+  (message
+    (if #pl
+      (cat "Stos TCP/IP nie jest uruchomiony (brak bsdsocket.library).\n\n"
+           "AmiDrive potrzebuje działającej sieci (Roadshow, AmiTCP, Miami). "
+           "Instalację można dokończyć, ale przed synchronizacją uruchom sieć.")
+      (cat "No TCP/IP stack is running (bsdsocket.library not found).\n\n"
+           "AmiDrive needs a working network (Roadshow, AmiTCP, Miami). "
+           "The installation can go on, but start the network before synchronising."))))
+
+; ---- the program -----------------------------------------------------------------
+
+(set #parent
+  (askdir
+    (prompt (if #pl "Gdzie zainstalować program AmiDrive?\n(zostanie utworzona szuflada AmiDrive)"
+                    "Where should AmiDrive be installed?\n(a drawer AmiDrive is created there)"))
+    (help (if #pl "Program, jego ikona i opisy trafią do szuflady AmiDrive w wybranym miejscu."
+                  "The program, its icon and the documentation go into a drawer AmiDrive there."))
+    (default @default-dest)))
+(set #progdir (tackon #parent "AmiDrive"))
+(set #prog (tackon #progdir "AmiDrive"))
+(set @default-dest #progdir)
+
+; a running AmiDrive (any version, anywhere) is stopped before its file is replaced
+(working (if #pl "Zatrzymywanie działającego AmiDrive..." "Stopping a running AmiDrive..."))
+(run "AmiDrive STOP >NIL:")
+
+(if (= (exists #progdir (noreq)) 0)
+  (makedir #progdir
+    (prompt (if #pl "Tworzenie szuflady programu." "Creating the program drawer."))
+    (help @makedir-help)
+    (infos)))
+
+(copyfiles
+  (prompt (if #pl "Kopiowanie programu AmiDrive." "Copying the program AmiDrive."))
+  (help @copyfiles-help)
+  (source "AmiDrive")
+  (dest #progdir)
+  (infos)
+  (optional "force"))
+
+(copyfiles
+  (prompt (if #pl "Kopiowanie opisów." "Copying the documentation."))
+  (help @copyfiles-help)
+  (source "Docs")
+  (dest #progdir)
+  (all)
+  (optional "force"))
+
+(complete 30)
+
+; ---- settings --------------------------------------------------------------------
+
+(set #keep 0)
+(if (exists "ENVARC:AmiDrive/AmiDrive.prefs" (noreq))
+  (set #keep
+    (askbool
+      (prompt (if #pl "AmiDrive był już skonfigurowany.\nZachować dotychczasowe ustawienia (katalog, folder OneDrive)?"
+                      "AmiDrive has been set up before.\nKeep the current settings (directory, OneDrive folder)?"))
+      (help (if #pl "Tak - instalator tylko podmieni program. Nie - zapyta o wszystkie ustawienia od nowa."
+                    "Yes - only the program is replaced. No - all the settings are asked again."))
+      (choices (if #pl "Zachowaj" "Keep") (if #pl "Ustaw od nowa" "Set again"))
+      (default 1))))
+
+(if (= #keep 0)
+  (
+    (set #localparent
+      (askdir
+        (prompt (if #pl "Gdzie trzymać pliki synchronizowane z OneDrive?\n(wybierz dysk lub szufladę)"
+                        "Where should the files synchronised with OneDrive be kept?\n(choose a disk or drawer)"))
+        (help (if #pl (cat "W wybranym miejscu powstanie szuflada (nazwa w następnym kroku) z kopią "
+                           "folderu z OneDrive. Wybierz dysk z wolnym miejscem; najlepiej FFS2, SFS lub PFS "
+                           "(długie nazwy). Na OFS/FFS nazwy dłuższe niż 30 znaków są skracane.")
+                      (cat "A drawer (named in the next step) with the copy of the OneDrive folder is "
+                           "created there. Choose a disk with free space; FFS2, SFS or PFS keep long "
+                           "names, on OFS/FFS names longer than 30 characters are shortened.")))
+        (default (if (exists "Work:" (noreq)) "Work:" "SYS:"))))
+    (set #localname
+      (askstring
+        (prompt (if #pl "Nazwa szuflady na pliki z OneDrive:" "Name of the drawer for the OneDrive files:"))
+        (help (if #pl "Szuflada zostanie utworzona, jeśli jej nie ma." "The drawer is created if it does not exist."))
+        (default "OneDrive")))
+    (set #local (tackon #localparent #localname))
+    (if (= (exists #local (noreq)) 0)
+      (makedir #local
+        (prompt (if #pl "Tworzenie szuflady na pliki z OneDrive." "Creating the drawer for the OneDrive files."))
+        (help @makedir-help)
+        (infos)))
+
+    (set #remote
+      (askstring
+        (prompt (if #pl "Który folder w OneDrive synchronizować?\n(musi już istnieć w OneDrive, np. /Amiga)"
+                        "Which OneDrive folder should be synchronised?\n(it must exist in OneDrive, e.g. /Amiga)"))
+        (help (if #pl (cat "Ścieżka folderu od korzenia OneDrive, np. /Amiga albo /Dokumenty/Amiga. "
+                           "Utwórz go w przeglądarce lub aplikacji OneDrive, jeśli go nie ma. "
+                           "Synchronizowany jest tylko ten folder, nie cały OneDrive.")
+                      (cat "The folder path from the OneDrive root, e.g. /Amiga or /Documents/Amiga. "
+                           "Create it in the browser or the OneDrive app if needed. Only this folder "
+                           "is synchronised, not the whole OneDrive.")))
+        (default "/Amiga")))
+
+    (set #cs
+      (askchoice
+        (prompt (if #pl "Strona kodowa nazw plików na Amidze:" "Character set of file names on the Amiga:"))
+        (help (if #pl "Latin-2 dla polskich liter (ą, ę, ł...). Znaki spoza strony kodowej są zamieniane na _."
+                      "Latin-2 for Central European letters. Characters outside the set become _."))
+        (choices "Latin-1 (ISO-8859-1)" (if #pl "Latin-2 (ISO-8859-2, polskie litery)" "Latin-2 (ISO-8859-2)"))
+        (default (if #pl 1 0))))
+    (set #charset (if (= #cs 1) "LATIN2" "LATIN1"))
+
+    (set #interval
+      (asknumber
+        (prompt (if #pl "Co ile minut sprawdzać zmiany w tle?" "Check for changes every how many minutes?"))
+        (help (if #pl "Każde sprawdzenie pyta OneDrive tylko o zmiany od ostatniego razu."
+                      "Each check asks OneDrive only for the changes since the last time."))
+        (range 1 1440)
+        (default 3)))
+
+    (set #up
+      (askchoice
+        (prompt (if #pl "Kierunek synchronizacji:" "Direction of the synchronisation:"))
+        (help (if #pl (cat "W obie strony: zmiany zrobione na Amidze są wysyłane do OneDrive (przy konflikcie "
+                           "zachowywane są obie wersje). Tylko pobieranie: Amiga dostaje zmiany z chmury, "
+                           "nic nie jest wysyłane ani usuwane w OneDrive.")
+                      (cat "Both ways: changes made on the Amiga are sent to OneDrive (on a conflict both "
+                           "versions are kept). Download only: the Amiga gets the changes from the cloud, "
+                           "nothing is sent or deleted in OneDrive.")))
+        (choices (if #pl "W obie strony" "Both ways") (if #pl "Tylko pobieranie z OneDrive" "Download only"))
+        (default 0)))
+
+    (set #appicon
+      (askbool
+        (prompt (if #pl "Pokazywać ikonę \"OneDrive\" na pulpicie Workbencha?"
+                        "Show a \"OneDrive\" icon on the Workbench?"))
+        (help (if #pl (cat "Dopóki AmiDrive działa w tle: dwuklik otwiera szufladę z plikami, pliki upuszczone "
+                           "na ikonę są kopiowane i wysyłane, menu Narzędzia ma polecenia AmiDrive.")
+                      (cat "While AmiDrive runs in the background: double-click opens the drawer, files "
+                           "dropped on it are copied and sent, the Tools menu gets AmiDrive commands.")))
+        (choices (if #pl "Tak" "Yes") (if #pl "Nie" "No"))
+        (default 1)))
+
+    ; AmiDrive saves the settings it is given; STOP only stops a running copy (none now)
+    (working (if #pl "Zapisywanie ustawień..." "Saving the settings..."))
+    (run (cat "\"" #prog "\" LOCAL=\"" #local "\" REMOTE=\"" #remote "\" CHARSET=" #charset
+              " INTERVAL=" #interval " UPLOAD=" (if (= #up 0) "YES" "NO")
+              " APPICON=" (if #appicon "YES" "NO") " STOP >NIL:"))
+  ))
+
+(complete 60)
+
+; ---- time zone -------------------------------------------------------------------
+
+(if (= (getenv "TZ") "")
+  (
+    (set #tz
+      (askchoice
+        (prompt (if #pl "Strefa czasowa (zmienna TZ, z czasem letnim):" "Time zone (TZ variable, with summer time):"))
+        (help (if #pl (cat "OneDrive podaje czas w UTC. Ustawienia regionalne AmigaOS nie znają czasu letniego, "
+                           "więc bez TZ daty plików latem różnią się o godzinę. Zegar Amigi musi też "
+                           "pokazywać dobrą godzinę (inaczej połączenia szyfrowane się nie udadzą).")
+                      (cat "OneDrive gives times in UTC. The AmigaOS Locale has no summer time, so without TZ "
+                           "file dates are an hour off in summer. The Amiga clock must also be right "
+                           "(else the encrypted connections fail).")))
+        (choices (if #pl "Europa Środkowa (Polska, Niemcy...)" "Central Europe (Germany, Poland...)")
+                 (if #pl "Wielka Brytania, Irlandia, Portugalia" "UK, Ireland, Portugal")
+                 (if #pl "Europa Wschodnia (Finlandia, Grecja...)" "Eastern Europe (Finland, Greece...)")
+                 (if #pl "Nie ustawiaj (strefa z Locale)" "Do not set (zone from Locale)"))
+        (default (if #pl 0 3))))
+    (if (< #tz 3)
+      (run (cat "SetEnv SAVE TZ "
+                (select #tz "CET-1CEST,M3.5.0,M10.5.0/3" "GMT0BST,M3.5.0/1,M10.5.0"
+                            "EET-2EEST,M3.5.0/3,M10.5.0/4"))))
+  ))
+
+; ---- autostart -------------------------------------------------------------------
+
+(set #auto
+  (askbool
+    (prompt (if #pl "Uruchamiać AmiDrive automatycznie przy starcie Workbencha?"
+                    "Start AmiDrive automatically with the Workbench?"))
+    (help (if #pl (cat "W SYS:WBStartup zostanie położona ikona \"AmiDrive\", która uruchamia program z "
+                       #progdir " (bez drugiej kopii programu). Wyłączenie: usunąć AmiDrive i "
+                       "AmiDrive.info z SYS:WBStartup.")
+                  (cat "An icon \"AmiDrive\" in SYS:WBStartup starts the program in " #progdir
+                       " (no second copy of it). To switch it off delete AmiDrive and AmiDrive.info "
+                       "from SYS:WBStartup.")))
+    (choices (if #pl "Tak" "Yes") (if #pl "Nie" "No"))
+    (default 1)))
+
+(if #auto
+  (
+    (copyfiles
+      (prompt (if #pl "Dodawanie AmiDrive do SYS:WBStartup." "Adding AmiDrive to SYS:WBStartup."))
+      (help @copyfiles-help)
+      (source "WBStartup/AmiDrive")
+      (dest "SYS:WBStartup")
+      (infos)
+      (optional "force"))
+    (tooltype
+      (prompt (if #pl "Ustawianie ikony autostartu." "Setting up the autostart icon."))
+      (help @tooltype-help)
+      (dest "SYS:WBStartup/AmiDrive")
+      (setdefaulttool #prog)
+      (noposition)))
+  (
+    (if (exists "SYS:WBStartup/AmiDrive.info" (noreq))
+      (
+        (delete "SYS:WBStartup/AmiDrive.info" (optional "force"))
+        (delete "SYS:WBStartup/AmiDrive" (optional "force"))))))
+
+(complete 90)
+
+; ---- first start -----------------------------------------------------------------
+
+(set #start
+  (askbool
+    (prompt (if #pl (cat "Uruchomić AmiDrive teraz?\n\nPrzy pierwszym starcie AmiDrive pokaże w oknie kod "
+                         "logowania: otwórz na telefonie lub PC https://login.microsoft.com/device "
+                         "i wpisz ten kod.")
+                    (cat "Start AmiDrive now?\n\nOn the first start AmiDrive shows a sign-in code in a "
+                         "window: open https://login.microsoft.com/device on a phone or PC and enter it.")))
+    (help (if #pl "AmiDrive zostanie uruchomiony tak, jak po dwukliku na jego ikonie."
+                  "AmiDrive is started as if its icon was double-clicked."))
+    (choices (if #pl "Uruchom" "Start") (if #pl "Później" "Later"))
+    (default 1)))
+(if #start (openwbobject #prog))
+
+(complete 100)
+
+(exit
+  (if #pl
+    (cat "AmiDrive został zainstalowany w " #progdir ".\n\n"
+         "Ustawienia: ENVARC:AmiDrive/AmiDrive.prefs\nOpis: " #progdir "/AmiDrive.txt\n\n"
+         "Zatrzymanie: menu Narzędzia > AmiDrive: stop albo w Shellu \"AmiDrive STOP\".")
+    (cat "AmiDrive has been installed in " #progdir ".\n\n"
+         "Settings: ENVARC:AmiDrive/AmiDrive.prefs\nManual: " #progdir "/AmiDrive_en.txt\n\n"
+         "To stop it: Tools menu > AmiDrive: stop, or \"AmiDrive STOP\" in a Shell."))
+  (quiet))

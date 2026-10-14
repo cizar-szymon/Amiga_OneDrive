@@ -1,0 +1,117 @@
+AmiDrive 0.3.0 - klient OneDrive dla AmigaOS 3.x
+================================================
+
+AmiDrive synchronizuje JEDEN wybrany folder z OneDrive z szufladą na dysku
+Amigi, w obie strony. Pliki wrzucone do tego folderu na telefonie lub PC
+pojawiają się na Amidze, a pliki zmienione na Amidze trafiają do chmury.
+Połączenie idzie prosto do Microsoft (HTTPS), bez PC ani Raspberry Pi.
+
+
+Wymagania
+---------
+- AmigaOS 3.0 lub nowszy (sprawdzony na 3.2.2), procesor 68020 lub szybszy,
+  kilka MB Fast RAM,
+- stos TCP/IP z bsdsocket.library (Roadshow, AmiTCP, Miami) i internet,
+- AmiSSL 5.24 lub nowszy (Aminet: util/libs/AmiSSL-5.x),
+- poprawny zegar Amigi (inaczej połączenia szyfrowane się nie udadzą),
+- konto Microsoft z OneDrive (prywatne albo firmowe / szkolne).
+
+
+Instalacja
+----------
+1. Rozpakuj archiwum, np. do RAM:.
+2. Kliknij dwa razy ikonę "Install-AmiDrive".
+3. Instalator zapyta:
+   - gdzie zainstalować program (powstanie szuflada AmiDrive),
+   - gdzie trzymać pliki z OneDrive (dysk lub szuflada + nazwa, np.
+     Work:OneDrive),
+   - który folder w OneDrive synchronizować (np. /Amiga - musi już istnieć,
+     utwórz go w przeglądarce lub aplikacji OneDrive),
+   - polskie litery w nazwach (Latin-2), co ile minut sprawdzać zmiany,
+     w obie strony czy tylko pobieranie, ikona "OneDrive" na pulpicie,
+   - strefa czasowa (zmienna TZ z czasem letnim) i autostart.
+4. Na koniec AmiDrive może się od razu uruchomić. Przy pierwszym starcie
+   pokaże w oknie kod: otwórz na telefonie lub PC
+   https://login.microsoft.com/device, wpisz kod, zaloguj się i zgódź na
+   dostęp aplikacji AmiDrive do plików.
+
+Ponowna instalacja (nowa wersja) zatrzymuje działający AmiDrive i może
+zostawić dotychczasowe ustawienia.
+
+
+Na co dzień
+-----------
+AmiDrive pracuje w tle bez okna i co kilka minut sprawdza zmiany. Okno
+pojawia się tylko przy błędzie albo logowaniu.
+
+Ikona "OneDrive" na pulpicie (gdy AmiDrive działa):
+  dwuklik             otwiera szufladę z plikami (AmigaOS 3.5 lub nowszy)
+  upuszczone pliki    są kopiowane do szuflady i od razu wysyłane
+  menu Narzędzia      "AmiDrive: synchronise now" i "AmiDrive: stop"
+
+W Shellu:
+  AmiDrive                   praca w tle
+  AmiDrive ONCE              jedno przejście
+  AmiDrive STOP              zatrzymuje AmiDrive działający w tle
+  AmiDrive INFO              ustawienia, logowanie, zajętość OneDrive
+  AmiDrive LOGIN / LOGOUT    logowanie / usunięcie tokenu
+  AmiDrive TEST              zegar, strefa, DNS, TLS, połączenie
+
+Dziennik: <szuflada z plikami>/.AmiDrive/AmiDrive.log
+
+
+Opcje (Shell i Tool Types ikony programu)
+-----------------------------------------
+  LOCAL=szuflada         pliki na Amidze, np. Work:OneDrive
+  REMOTE=/folder         folder w OneDrive, np. /Amiga
+  CHARSET=LATIN1|LATIN2  strona kodowa nazw (LATIN2: polskie litery)
+  INTERVAL=min           co ile minut sprawdzać (domyślnie 3)
+  UPLOAD=YES|NO          NO: tylko pobieranie z chmury
+  APPICON=YES|NO         ikona "OneDrive" na pulpicie
+  STATE=szuflada         inne miejsce stanu i dziennika
+  WINDOW                 (z ikony) okno z bieżącym postępem
+  CLIENTID= TENANT=      własna rejestracja aplikacji (patrz niżej)
+
+Opcje podane w Shellu są zapamiętywane w ENVARC:AmiDrive/AmiDrive.prefs.
+Tool Types mają pierwszeństwo, ale nie są zapisywane ("(...)" = wyłączone).
+
+
+Jak działa
+----------
+- Zmiany w chmurze: AmiDrive pyta OneDrive tylko o różnice od ostatniego
+  razu, pobiera nowe pliki, przenosi i usuwa te, które zmieniły się w chmurze.
+- Zmiany na Amidze: nowe i zmienione pliki są wysyłane, przeniesione -
+  przenoszone, usunięte - usuwane (trafiają do kosza OneDrive).
+- Plik zmieniony w obu miejscach: wersja z chmury trafia pod właściwą nazwę,
+  wersja z Amigi zostaje jako "nazwa-Amiga.ext" i też jest wysyłana.
+- Gdy brakuje większości plików (np. odłączony dysk), nic nie jest usuwane.
+- Nazwy dłuższe niż pozwala dysk (OFS/FFS: 30 znaków) są skracane do
+  "początek~hhhhhh.ext"; bity ochrony i komentarze nie są przenoszone.
+
+
+Konto firmowe innej organizacji
+-------------------------------
+Administrator może wymagać zgody na aplikację AmiDrive. Wtedy albo
+administrator ją zatwierdza, albo organizacja rejestruje własną aplikację
+w Microsoft Entra ID (public client, "Allow public client flows: Yes",
+uprawnienia Microsoft Graph: Files.ReadWrite i offline_access) i podaje:
+  AmiDrive CLIENTID=<identyfikator> TENANT=<id dzierżawy>
+  AmiDrive LOGIN
+
+
+Bezpieczeństwo
+--------------
+ENVARC:AmiDrive/token daje dostęp do Twoich plików w OneDrive - nie
+udostępniaj go. AmiDrive LOGOUT usuwa go z Amigi; dostęp można też odebrać
+na koncie Microsoft. Certyfikaty serwerów są zawsze sprawdzane.
+
+
+Odinstalowanie
+--------------
+AmiDrive STOP, potem usuń szufladę programu, ENVARC:AmiDrive,
+SYS:WBStartup/AmiDrive(.info) i ewentualnie szufladę z plikami (pliki
+zostają też w OneDrive).
+
+
+Zgłaszanie błędów: podaj numer wersji (Version AmiDrive) i dołącz dziennik
+<szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).

@@ -1,0 +1,116 @@
+AmiDrive 0.3.0 - a OneDrive client for AmigaOS 3.x
+==================================================
+
+AmiDrive synchronises ONE chosen OneDrive folder with a drawer on the Amiga,
+both ways. Files put into that folder on a phone or PC appear on the Amiga,
+files changed on the Amiga go to the cloud. It talks to Microsoft directly
+(HTTPS), no PC or Raspberry Pi in between.
+
+
+Requirements
+------------
+- AmigaOS 3.0 or newer (tested on 3.2.2), a 68020 or faster, a few MB of
+  Fast RAM,
+- a TCP/IP stack with bsdsocket.library (Roadshow, AmiTCP, Miami), internet,
+- AmiSSL 5.24 or newer (Aminet: util/libs/AmiSSL-5.x),
+- a correct Amiga clock (else the encrypted connections fail),
+- a Microsoft account with OneDrive (personal or work / school).
+
+
+Installation
+------------
+1. Unpack the archive, e.g. to RAM:.
+2. Double-click the icon "Install-AmiDrive".
+3. The installer asks:
+   - where to install the program (a drawer AmiDrive is created),
+   - where to keep the OneDrive files (disk or drawer + name, e.g.
+     Work:OneDrive),
+   - which OneDrive folder to synchronise (e.g. /Amiga - it must exist,
+     create it in the browser or the OneDrive app),
+   - the character set of names, how often to check, both ways or download
+     only, the "OneDrive" icon on the Workbench,
+   - the time zone (TZ variable with summer time) and autostart.
+4. At the end AmiDrive can start at once. On the first start it shows a
+   code in a window: open https://login.microsoft.com/device on a phone or
+   PC, enter the code, sign in and allow AmiDrive to access your files.
+
+Installing again (a new version) stops a running AmiDrive and can keep the
+current settings.
+
+
+Every day
+---------
+AmiDrive works in the background without a window and checks for changes
+every few minutes. A window appears only on an error or for signing in.
+
+The "OneDrive" icon on the Workbench (while AmiDrive runs):
+  double-click        opens the drawer with the files (AmigaOS 3.5+)
+  files dropped on it are copied into the drawer and sent at once
+  Tools menu          "AmiDrive: synchronise now" and "AmiDrive: stop"
+
+In a Shell:
+  AmiDrive                   work in the background
+  AmiDrive ONCE              one pass
+  AmiDrive STOP              stop the AmiDrive running in the background
+  AmiDrive INFO              settings, sign-in, OneDrive space
+  AmiDrive LOGIN / LOGOUT    sign in / delete the token
+  AmiDrive TEST              clock, time zone, DNS, TLS, connection
+
+Log: <drawer with the files>/.AmiDrive/AmiDrive.log
+
+
+Options (Shell and Tool Types of the program icon)
+--------------------------------------------------
+  LOCAL=drawer           the files on the Amiga, e.g. Work:OneDrive
+  REMOTE=/folder         the OneDrive folder, e.g. /Amiga
+  CHARSET=LATIN1|LATIN2  character set of names
+  INTERVAL=min           minutes between checks (default 3)
+  UPLOAD=YES|NO          NO: download from the cloud only
+  APPICON=YES|NO         the "OneDrive" icon on the Workbench
+  STATE=drawer           another place for the state and the log
+  WINDOW                 (from the icon) a window with the progress
+  CLIENTID= TENANT=      your own app registration (see below)
+
+Options given in a Shell are remembered in ENVARC:AmiDrive/AmiDrive.prefs.
+Tool Types take precedence but are not saved ("(...)" = switched off).
+
+
+How it works
+------------
+- Changes in the cloud: AmiDrive asks OneDrive only for what changed since
+  the last time, downloads new files, moves and deletes what changed there.
+- Changes on the Amiga: new and changed files are sent, moved ones moved,
+  deleted ones deleted (into the OneDrive recycle bin).
+- A file changed in both places: the cloud version gets the right name, the
+  Amiga version is kept as "name-Amiga.ext" and sent as well.
+- When most files are missing (e.g. a disk not mounted), nothing is deleted.
+- Names longer than the disk allows (OFS/FFS: 30 characters) become
+  "start~hhhhhh.ext"; protection bits and comments are not transferred.
+
+
+Work account of another organisation
+------------------------------------
+An administrator may require consent for the AmiDrive app. Then either the
+administrator grants it, or the organisation registers its own app in
+Microsoft Entra ID (public client, "Allow public client flows: Yes",
+Microsoft Graph permissions Files.ReadWrite and offline_access) and uses:
+  AmiDrive CLIENTID=<application id> TENANT=<tenant id>
+  AmiDrive LOGIN
+
+
+Security
+--------
+ENVARC:AmiDrive/token gives access to your OneDrive files - do not share
+it. AmiDrive LOGOUT deletes it from the Amiga; access can also be revoked
+in the Microsoft account. Server certificates are always checked.
+
+
+Uninstalling
+------------
+AmiDrive STOP, then delete the program drawer, ENVARC:AmiDrive,
+SYS:WBStartup/AmiDrive(.info) and, if wanted, the drawer with the files
+(the files stay in OneDrive as well).
+
+
+Reporting bugs: give the version (Version AmiDrive) and attach the log
+<drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).

@@ -1,0 +1,27 @@
+AmiDrive - release history
+==========================
+
+Reporting bugs: give the version (in a Shell: Version AmiDrive) and attach
+the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
+
+
+0.3.0 (14.10.2026)
+------------------
+- Installer (Install-AmiDrive): where to put the program and the files, the
+  OneDrive folder, character set, interval, direction, icon, time zone and
+  autostart.
+- "OneDrive" icon on the Workbench: double-click opens the drawer, files
+  dropped on it are copied and sent, commands in the Tools menu.
+- Autostart from SYS:WBStartup.
+
+0.2.0 (14.10.2026)
+------------------
+- Start from the icon (Tool Types), sign-in in a window on the first start.
+- Background work, AmiDrive STOP, only one synchronisation at a time.
+- Log .AmiDrive/AmiDrive.log.
+- Fix: crash after signing in from the icon.
+
+0.1.0 (14.10.2026)
+------------------
+- First version: sign-in with a device code, synchronisation both ways,
+  conflicts without losing data.

@@ -34,6 +34,18 @@ start z ikony, autostart z `WBStartup`, ikona „OneDrive” na pulpicie Workben
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
 i instalacji dla użytkownika: [docs/AmiDrive-opis.pdf](docs/AmiDrive-opis.pdf) (`tools/make_doc_pdf.py`).
 
+## Instalacja na Amidze
+
+Archiwum `releases/amiga/AmiDrive-<wersja>.lha` rozpakować (np. do `RAM:`) i kliknąć ikonę
+**Install-AmiDrive**. Instalator systemowy (Installer z AmigaOS, po polsku przy polskim języku
+systemu) pyta, gdzie zainstalować program, **gdzie trzymać synchronizowane pliki** (dysk lub
+szuflada + nazwa), o folder w OneDrive, stronę kodową, czas sprawdzania, kierunek, ikonę
+„OneDrive”, strefę czasową i autostart. Ponowna instalacja zatrzymuje działający AmiDrive
+i może zostawić ustawienia. Opisy dla użytkownika: `docs/release/amiga/` (w paczce `Docs/`).
+
+Budowa paczki: `make`, potem `python tools/make_release.py --lha` (pakuje `lha` na Amidze przez
+AmiAgent; bez `--lha` tylko szuflada `build/release/AmiDrive-<wersja>/`).
+
 ## Wymagania na Amidze
 
 - AmigaOS 3.x, 68020 lub nowszy,
@@ -134,3 +146,7 @@ python tools/amiga_remote.py run "Work:AmiDrive/AmiDriveTests"
 | `tools/amiga_remote.py` | klient AmiAgent |
 | `tools/make_icon.py`, `tools/icon_tooltypes.py` | ikona `AmiDrive.info`, Tool Types |
 | `tools/amiga/WBRun.c` | start programu jak z ikony (testy przez AmiAgent) |
+| `tools/amiga/Click.c` | kliknięcie / dwuklik / menu / przeciąganie myszą (testy przez AmiAgent) |
+| `install/Install-AmiDrive` | skrypt instalatora (Installer), UTF-8 w repo, ISO-8859-2 w paczce |
+| `tools/make_release.py` | paczka dla Amigi: program, ikony, opisy, instalator, `.lha` |
+| `docs/release/amiga/` | opisy dla użytkownika (pl/en) i historia wydań |
