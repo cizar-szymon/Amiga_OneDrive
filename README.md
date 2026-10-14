@@ -31,7 +31,8 @@ Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawe
 **Stan (wersja 0.2.0):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
 (OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
 start z ikony.
-Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md).
+Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
+i instalacji dla użytkownika: [docs/AmiDrive-opis.pdf](docs/AmiDrive-opis.pdf) (`tools/make_doc_pdf.py`).
 
 ## Wymagania na Amidze
 
