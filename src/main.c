@@ -711,30 +711,27 @@ static int percent_of(unsigned long done, unsigned long total)
     return p > 100 ? 100 : (int)p;
 }
 
+/* below the bar, one line: "Last check 15:12 no changes; Next at 15:55" */
 static void show_idle(void)
 {
-    static char l2[160], l3[80], t[24];
+    static char l2[200], t[24];
 
     if (!status_is_open())
         return;
     sprintf(l2, "Last check %s", last_result[0] ? last_result : "-");
     if (paused) {
-        status_show("Paused", l2, "Sync now continues", -1);
-        return;
-    }
-    if (next_check) {
+        strcat(l2, "; Sync now continues");
+    } else if (next_check) {
         tz_format_iso8601(next_check, t);
         t[16] = '\0';
-        sprintf(l3, "Next at %s", t + 11);
-    } else {
-        l3[0] = '\0';
+        sprintf(l2 + strlen(l2), "; Next at %s", t + 11);
     }
-    status_show("Up to date", l2, l3, -1);
+    status_show(paused ? "Paused" : "Up to date", l2, -1);
 }
 
 static void show_progress(const SyncProgress *p)
 {
-    static char l1[100], l2[200], l3[160], a[24], b[24], c[40];
+    static char l1[200], l3[160], a[24], b[24], c[40];
     long t = ticks_since(&pg.phase_start);
     unsigned long rate = 0;
     int pct = percent_of(p->done, p->total);
@@ -744,28 +741,24 @@ static void show_progress(const SyncProgress *p)
         rate = pg.xfer > 40000000UL ? pg.xfer / (unsigned long)t * 50 : pg.xfer * 50 / (unsigned long)t;
 
     if (p->phase == SYNC_SCAN) {
-        status_show("Checking the Amiga", cfg.local, "", -1);
+        status_show("Checking the Amiga", cfg.local, -1);
         return;
     }
-    if (p->phase == SYNC_CLOUD && pct < 0 && !p->file)
-        what = "Checking OneDrive";     /* reading the changes, nothing to download yet */
+    if (p->phase == SYNC_CLOUD && pct < 0 && !p->file) {   /* reading the changes */
+        sprintf(l3, "%ld items read", p->items);
+        status_show("Checking OneDrive", l3, -1);
+        return;
+    }
+    if (p->file && pct < 0)             /* the whole is unknown: the bar shows the file */
+        pct = percent_of(p->file_done, p->file_size);
+
+    /* above the bar: "Downloading 20% SOLAR FAKE Disag..." (long names are cut) */
     if (pct >= 0)
-        sprintf(l1, "%s: %d %%", what, pct);
+        sprintf(l1, "%s %d%%", what, pct);
     else
         strcpy(l1, what);
-
-    if (p->file) {
-        int fp = percent_of(p->file_done, p->file_size);
-
-        /* the percentage first: long names are cut at the window edge */
-        sprintf(l2, "%d%% %.120s", fp < 0 ? 0 : fp, below_local(p->file));
-        if (pct < 0)                    /* the whole is unknown: the bar shows the file */
-            pct = percent_of(p->file_done, p->file_size);
-    } else if (p->phase == SYNC_CLOUD) {
-        sprintf(l2, "%ld items read", p->items);
-    } else {
-        l2[0] = '\0';
-    }
+    if (p->file)
+        sprintf(l1 + strlen(l1), " %.120s", below_local(p->file));
 
     if (p->total) {
         fmt_bytes(p->done, a);
@@ -783,7 +776,7 @@ static void show_progress(const SyncProgress *p)
             sprintf(l3 + strlen(l3), "  %s", c);
         }
     }
-    status_show(l1, l2, l3, pct);
+    status_show(l1, l3, pct);
 }
 
 /* sync_run progress: the icon and the window answer during the pass too */
@@ -882,7 +875,7 @@ static void pass_begins(void)
     next_check = 0;
     status_busy(1);
     if (status_is_open())
-        status_show("Checking OneDrive", "Connecting ...", "", -1);
+        status_show("Checking OneDrive", "Connecting ...", -1);
 }
 
 /* Wait secs between passes (paused: until "Sync now"). AD_OK: time is up or "Sync now"

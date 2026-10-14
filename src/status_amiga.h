@@ -3,7 +3,7 @@
  * buttons "Sync now", "Stop" (the synchronisation: paused until "Sync now") and "Quit"
  * (ends AmiDrive); the close gadget only hides it. It opens on request (the
  * "OneDrive" icon, the Tools menu) or by itself for long passes; closing it does not
- * stop AmiDrive. Workbench 3.2 has no context menus for icons, so these buttons are
+ * stop AmiDrive. Title: "OneDrive <version>". Workbench 3.2 has no context menus for icons, so these buttons are
  * the quick way to the commands. */
 #ifndef STATUS_AMIGA_H
 #define STATUS_AMIGA_H
@@ -34,7 +34,8 @@ int status_handle(void);
 /* busy: a pass is running ("Synchronise now" is disabled). */
 void status_busy(int busy);
 
-/* New contents; percent < 0: no bar. Redrawn at once (callers limit how often). */
-void status_show(const char *line1, const char *line2, const char *line3, int percent);
+/* New contents: the line above and the line below the bar; percent < 0: empty bar.
+ * Redrawn at once (callers limit how often). */
+void status_show(const char *line1, const char *line2, int percent);
 
 #endif

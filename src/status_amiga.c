@@ -34,7 +34,7 @@ static APTR vi;                         /* GadTools visual info */
 static struct Gadget *glist, *gsync;
 static int text_bottom;                 /* the text area ends here (buttons below) */
 static int busy;
-static char lines[3][160];
+static char lines[2][160];          /* above and below the bar */
 static int percent = -1;
 
 static UWORD pen(int which, UWORD fallback)
@@ -106,8 +106,6 @@ static void redraw_all(int full)
     y += fh + 9;
 
     text_at(rp, x0, y, w, lines[1], pen(TEXTPEN, 1));
-    y += fh + 3;
-    text_at(rp, x0, y, w, lines[2], pen(TEXTPEN, 1));
 }
 
 static void redraw(void)
@@ -146,7 +144,7 @@ static struct Gadget *make_buttons(struct Screen *scr, int top, int fh)
 /* inner height for the screen's font */
 static int inner_height(int fh)
 {
-    return 4 * fh + 24 + 4 + fh + 6 + 6;            /* text, gap, buttons, bottom */
+    return 3 * fh + 22 + 4 + fh + 6 + 6;            /* text and bar, gap, buttons, bottom */
 }
 
 int status_layout(int *left, int *top, int *width, int *height)
@@ -190,7 +188,7 @@ int status_open(void)
         return 0;
     fh = scr->RastPort.TxHeight;
     top = scr->WBorTop + scr->Font->ta_YSize + 1;   /* the inner area starts here */
-    text_bottom = top + 4 * fh + 24;
+    text_bottom = top + 3 * fh + 22;
     if (!(vi = GetVisualInfo(scr, TAG_DONE)) || !make_buttons(scr, text_bottom + 4, fh)) {
         status_close();
         UnlockPubScreen(NULL, scr);
@@ -203,7 +201,7 @@ int status_open(void)
                          WA_Top, (ULONG)(scr->BarHeight + 3),
                          WA_InnerWidth, WIN_WIDTH,
                          WA_InnerHeight, (ULONG)inner_height(fh),
-                         WA_Title, (ULONG)AMIDRIVE_NAME " - OneDrive",
+                         WA_Title, (ULONG)"OneDrive " AMIDRIVE_VERSION,
                          WA_Gadgets, (ULONG)glist,
                          WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE,
                          WA_SmartRefresh, TRUE, WA_AutoAdjust, TRUE, WA_Activate, FALSE,
@@ -288,11 +286,10 @@ void status_busy(int b)
         GT_SetGadgetAttrs(gsync, win, NULL, GA_Disabled, (ULONG)b, TAG_DONE);
 }
 
-void status_show(const char *line1, const char *line2, const char *line3, int pct)
+void status_show(const char *line1, const char *line2, int pct)
 {
     strncpy(lines[0], line1 ? line1 : "", sizeof(lines[0]) - 1);
     strncpy(lines[1], line2 ? line2 : "", sizeof(lines[1]) - 1);
-    strncpy(lines[2], line3 ? line3 : "", sizeof(lines[2]) - 1);
     percent = pct;
     redraw();
 }

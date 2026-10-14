@@ -5,6 +5,12 @@ Reporting bugs: give the version (in a Shell: Version AmiDrive) and attach
 the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
 
 
+0.3.10 (14.10.2026)
+-------------------
+- Window title: "OneDrive" with the version. One line below the bar
+  ("Last check 15:12 no changes; Next at 15:55"), a lower window; while
+  working the file name in the top line, amounts, speed and time below.
+
 0.3.9 (14.10.2026)
 ------------------
 - Buttons "Sync now", "Stop", "Quit": Stop stops the synchronisation (paused
