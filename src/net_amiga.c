@@ -71,6 +71,8 @@ static const char *ssl_error(void)
 
 int net_init(char *err, int errsize)
 {
+    if (ctx)                            /* already done (sign-in, then synchronisation) */
+        return AD_OK;
     if (!(SocketBase = OpenLibrary("bsdsocket.library", 4))) {
         set_err(err, errsize, "cannot open bsdsocket.library v4 (is the TCP/IP stack running?)", NULL);
         return AD_ERR_NET;

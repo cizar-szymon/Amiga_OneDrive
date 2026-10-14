@@ -21,12 +21,12 @@
 | `LOGIN`, `LOGOUT`, `INFO` (właściciel i zajętość OneDrive) | ✅ A1200, konto firmowe (OneDrive for Business) |
 | `graph.c`: `/me/drive` | ✅ testy |
 | `graph.c`: element po ścieżce, delta i children stronami (`nextLink`/`deltaLink`), pobieranie strumieniowe (302 → serwer plików), ponowienia 429/5xx, 404/410 | ✅ testy + A1200 (atrapy), ⏳ prawdziwe konto |
-| Start z ikony (Tool Types, `WINDOW`, dziennik `.AmiDrive/AmiDrive.log`) | ⏳ |
+| Start z ikony (Tool Types, `WINDOW`, logowanie w oknie, pytanie o zatrzymanie), dziennik `.AmiDrive/AmiDrive.log`, jedna synchronizacja naraz, `STOP`, ikona `AmiDrive.info` | ✅ A1200 (`WBRun`); ⏳ ponowny test logowania z ikony po poprawce `net_init` |
 | `state.c`: baza stanu po `id` (ścieżki z łańcucha rodziców), plik tekstowy zapisywany strumieniowo do `.new` i podmieniany, linia końcowa | ✅ testy + A1200 (`AmiDrive TEST` zapisuje i czyta stan w `T:`) |
 | `plat`: strumieniowe pliki (`plat_open_read/write`, `plat_close` z podmianą) | ✅ A1200 |
 | `sync.c`: etap 1 – pobieranie zmian (foldery, pobieranie, przenoszenie, usuwanie, ochrona plików zmienionych na Amidze, pełna lista po 410) | ✅ testy + A1200 z kontem Business (nowe pliki, usuwanie, zmiana nazwy, podfolder, 3 poziomy folderów, przeniesienia plików i folderów, zmiana nazwy folderu, nazwa > 30 znaków, przeniesienie poza folder) |
 | `plat`: informacja o pliku, data, zmiana nazwy, tworzenie wprost, limit nazw woluminu | ✅ A1200 (`AmiDrive TEST`) |
-| `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ `ONCE` na A1200; ⏳ praca w tle |
+| `AmiDrive` / `AmiDrive ONCE`: synchronizacja co `INTERVAL` min albo raz, Ctrl-C, podsumowanie | ✅ A1200: `ONCE` i praca w tle (`INTERVAL=1`, zmiany wykryte w kolejnych cyklach, Ctrl-C w czasie czekania) |
 | Etap 2: wysyłanie (sesje w kawałkach 320 KiB), foldery, nowe wersje z `If-Match`, zmiana nazwy/przeniesienie przez `PATCH`, usuwanie, konflikty, `UPLOAD=YES\|NO` | ✅ testy + A1200 (atrapy) + A1200 z kontem Business (nowy plik i folder, nowa wersja, zmiana nazwy, przeniesienie, konflikt, usunięcie, zmiana nazwy i usunięcie folderu) |
 
 ## Wyniki testów
@@ -69,6 +69,18 @@
     zmiana nazwy folderu → nowy folder + przeniesienie pliku + usunięcie starego (zgodnie
     z opisem w ograniczeniach); usunięcie folderu z zawartością → jedno usunięcie folderu.
   Na koniec chmura w stanie sprzed testów (kopia w `RAM:Check` usunęła pliki testowe).
+- A1200, praca w tle i start z ikony (14.10.2026, wersja 0.2.0):
+  - `AmiDrive INTERVAL=1` w tle: przejście co minutę, plik dodany na Amidze wysłany w następnym
+    cyklu, usunięty – usunięty w chmurze; Ctrl-C (`stop`) kończy od razu;
+  - druga kopia z Shella: „already running”; `AmiDrive STOP` zatrzymuje i czeka na koniec;
+  - start jak z ikony (`tools/amiga/WBRun.c`, `OpenWorkbenchObject`): bez okna, wpisy tylko
+    w dzienniku; ponowny start → pytanie „Stop it?” (Esc = Anuluj; Return nie wybiera przycisku);
+  - Tool Types `WINDOW ONCE "LOCAL=RAM:WB Check" UPLOAD=NO TOOLPRI=0`: okno z postępem, wartość
+    ze spacją, `TOOLPRI` pominięte, prefs bez zmian;
+  - start z ikony bez tokenu: logowanie w oknie, potem synchronizacja – **padło** („Memory header
+    not located”): `cmd_login` i `cmd_sync` wywoływały `net_init()` dwa razy (druga inicjalizacja
+    AmiSSL w tym samym procesie, połączenie z pierwszej). Poprawione: drugie wywołanie nic nie robi.
+    Ponowny test do zrobienia (wymaga zalogowania).
 - A1200 `AmiDrive TEST`: TLS 1.3 `TLS_AES_256_GCM_SHA384`, nawiązanie połączenia z
   `graph.microsoft.com` ok. 2,3 s, drugie zapytanie na tym samym połączeniu 80 ms.
 - A1200 `AmiDrive TEST HOST=...` (badssl.com): odrzucone `expired`, `wrong.host`, `self-signed`,
@@ -177,6 +189,17 @@
   Identyfikator wpisany jako domyślny `AMIDRIVE_CLIENT_ID`; `CLIENTID=` dla organizacji
   z własną rejestracją. Konta firmowe innych organizacji mogą wymagać zgody administratora
   albo weryfikacji wydawcy (Publisher verification).
+- **Start z ikony (14.10.2026):** Tool Types czytane tym samym `ReadArgs` (`RDA_Source`), tylko
+  klucze z szablonu (obce, np. `TOOLPRI`, `DONOTWAIT`, pomijane), wartości w cudzysłowach;
+  pierwszeństwo: Shell > Tool Types > plik, zapisywane tylko argumenty Shella. Okno
+  `CON:…/AUTO/CLOSE/WAIT` otwiera się dopiero przy wypisaniu czegoś: błędy i logowanie zawsze,
+  postęp synchronizacji tylko z `WINDOW` (inaczej tylko dziennik). Bez tokenu – logowanie od razu.
+- **Jedna synchronizacja naraz:** publiczny port `AmiDrive` (dwie kopie psułyby wspólny stan).
+  Shell: druga kopia kończy się z komunikatem, `STOP` wysyła Ctrl-C do właściciela portu i czeka
+  do 60 s; Workbench: pytanie o zatrzymanie. Wada: proces zawieszony po awarii trzyma port do
+  restartu.
+- **Dziennik:** `<stan>/AmiDrive.log`, otwierany na czas przejścia (między przejściami można go
+  czytać), po 64 KB przenoszony do `AmiDrive.log.old`.
 - Program kompilowany dla 68020 (`-cpu=68020`), działa na 68020–68060.
 
 ## Znane ograniczenia / do zrobienia

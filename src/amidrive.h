@@ -7,10 +7,10 @@
 #define AMIDRIVE_H
 
 #define AMIDRIVE_NAME     "AmiDrive"
-#define AMIDRIVE_VERSION  "0.1.0"
+#define AMIDRIVE_VERSION  "0.2.0"
 #define AMIDRIVE_VER_NUM  0
-#define AMIDRIVE_REV_NUM  1
-#define AMIDRIVE_DATE     "13.10.2026"
+#define AMIDRIVE_REV_NUM  2
+#define AMIDRIVE_DATE     "14.10.2026"
 
 /* Result codes of the portable modules (0 = success, negative = error). */
 enum {

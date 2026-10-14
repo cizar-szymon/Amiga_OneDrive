@@ -8,18 +8,37 @@
  *   AmiDrive INFO           settings, sign-in state, OneDrive owner and space
  *   AmiDrive TEST           check clock, time zone, DNS, TLS and HTTP against Graph
  *   AmiDrive TEST HOST=x    TLS + "GET /" to another host (e.g. expired.badssl.com)
+ *   AmiDrive STOP           stop the AmiDrive running in the background (waits for it)
  *
- * Settings: Shell arguments > the prefs file (ENVARC:AmiDrive/AmiDrive.prefs).
+ * Settings: Shell arguments > Tool Types of the icon > the prefs file
+ * (ENVARC:AmiDrive/AmiDrive.prefs). Only Shell arguments are saved.
+ *
+ * From Workbench: the Tool Types are the arguments (others, like TOOLPRI, are ignored;
+ * "(...)" is switched off). Output goes to a window that opens only when there is
+ * something to show (errors, sign-in); the progress of the synchronisation only with
+ * WINDOW. Not signed in: the sign-in runs in that window first. Started again while
+ * running: asks whether to stop it.
+ *
+ * Only one synchronisation runs at a time (public port "AmiDrive"). Each pass is also
+ * written to <state>/AmiDrive.log (AmiDrive.log.old after 64 KB).
  */
+#include <stdarg.h>
 #include <string.h>
 
 #include <exec/types.h>
 #include <exec/memory.h>
+#include <exec/ports.h>
 #include <dos/dos.h>
+#include <dos/dosextens.h>
 #include <dos/rdargs.h>
+#include <intuition/intuition.h>
 #include <libraries/locale.h>
+#include <workbench/startup.h>
+#include <workbench/workbench.h>
 #include <proto/exec.h>
 #include <proto/dos.h>
+#include <proto/icon.h>
+#include <proto/intuition.h>
 
 #include "amidrive.h"
 #include "auth.h"
@@ -38,9 +57,15 @@ size_t __stack = 65536;                 /* OpenSSL needs more than the Shell def
 const char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDRIVE_DATE ")";
 
 #define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
-                 "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K"
+                 "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S"
 enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
-       ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_COUNT };
+       ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_WINDOW, ARG_STOP, ARG_COUNT };
+
+/* the output window when started from Workbench: opens on the first output */
+#define WB_WINDOW "CON:40/30/600/180/" AMIDRIVE_NAME "/AUTO/CLOSE/WAIT"
+#define LOG_NAME  "AmiDrive.log"
+#define LOG_MAX   65536L                /* then renamed to AmiDrive.log.old */
+#define PORT_NAME AMIDRIVE_NAME         /* public port of the running synchronisation */
 
 /* arguments that are settings, in template order, with their prefs keys */
 static const struct { int arg; const char *key; } setting_args[] = {
@@ -59,6 +84,126 @@ static State state;
 static AuthTokens tokens;
 static AuthDevice device;
 static char text[2048];
+static struct WBStartup *wbmsg;         /* started from Workbench */
+static int quiet;                       /* from Workbench without WINDOW: progress only to the log */
+static BPTR logfh;                      /* the log, open during a pass */
+static char log_path[CFG_PATH_SIZE + 32];
+static struct MsgPort *instance;        /* our public port while synchronising */
+
+/* ---- output: the Shell or the window, and the log ------------------------------- */
+
+/* The arguments are LONGs on the stack (vbcc: va_list points at them), as VFPrintf wants. */
+static void out_v(int progress, const char *fmt, va_list ap)
+{
+    if (Output() && !(progress && quiet))
+        VFPrintf(Output(), (CONST_STRPTR)fmt, (CONST_APTR)ap);
+    if (logfh)
+        VFPrintf(logfh, (CONST_STRPTR)fmt, (CONST_APTR)ap);
+}
+
+/* messages and errors: always shown */
+static void say(const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    out_v(0, fmt, ap);
+    va_end(ap);
+}
+
+/* progress of the synchronisation: from Workbench only with WINDOW */
+static void note(const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    out_v(1, fmt, ap);
+    va_end(ap);
+}
+
+static void log_open(void)
+{
+    static char old[sizeof(log_path) + 4];
+    PlatInfo info;
+
+    if (logfh || !log_path[0])
+        return;
+    if (plat_file_info(log_path, &info) == AD_OK && info.size > LOG_MAX) {
+        strcpy(old, log_path);
+        strcat(old, ".old");
+        plat_delete_file(old);
+        plat_rename(log_path, old);
+    }
+    if ((logfh = Open((STRPTR)log_path, MODE_READWRITE)) != 0)
+        Seek(logfh, 0, OFFSET_END);
+}
+
+static void log_close(void)
+{
+    if (logfh) {
+        Close(logfh);
+        logfh = 0;
+    }
+}
+
+/* ---- one synchronisation at a time ---------------------------------------------- */
+
+/* 1 if an AmiDrive is synchronising; with stop, Ctrl-C is sent to it */
+static int signal_running(int stop)
+{
+    struct MsgPort *p;
+
+    Forbid();
+    if ((p = FindPort((STRPTR)PORT_NAME)) != NULL && stop)
+        Signal(p->mp_SigTask, SIGBREAKF_CTRL_C);
+    Permit();
+    return p != NULL;
+}
+
+/* 0 if another AmiDrive is synchronising, else our port is added (if memory allows) */
+static int instance_claim(void)
+{
+    Forbid();
+    if (FindPort((STRPTR)PORT_NAME)) {
+        Permit();
+        return 0;
+    }
+    if ((instance = CreateMsgPort()) != NULL) {
+        instance->mp_Node.ln_Name = (char *)PORT_NAME;
+        instance->mp_Node.ln_Pri = -128;
+        AddPort(instance);
+    }
+    Permit();
+    return 1;
+}
+
+static void instance_release(void)
+{
+    if (instance) {
+        RemPort(instance);
+        DeleteMsgPort(instance);
+        instance = NULL;
+    }
+}
+
+/* Workbench: "already running, stop it?" */
+static int ask_stop(void)
+{
+    struct IntuitionBase *IntuitionBase = (struct IntuitionBase *)OpenLibrary((STRPTR)"intuition.library", 36);
+    struct EasyStruct es;
+    LONG r = 0;
+
+    if (!IntuitionBase)
+        return 0;
+    es.es_StructSize = sizeof(es);
+    es.es_Flags = 0;
+    es.es_Title = (STRPTR)AMIDRIVE_NAME;
+    es.es_TextFormat = (STRPTR)AMIDRIVE_NAME " is already running.\nStop it?";
+    es.es_GadgetFormat = (STRPTR)"Stop|Cancel";
+    r = EasyRequestArgs(NULL, &es, NULL, NULL);
+    CloseLibrary((struct Library *)IntuitionBase);
+    return r == 1;
+}
 
 static AuthApp app(void)
 {
@@ -81,9 +226,9 @@ static const char *local_text(const char *utf8)
 static void print_rc(const char *what, int rc, const char *err)
 {
     if (rc == AD_ERR_BREAK)
-        Printf("%s: interrupted\n", (LONG)what);
+        say("%s: interrupted\n", (LONG)what);
     else
-        Printf("%s: %s\n", (LONG)what, (LONG)(err && *err ? err : "failed"));
+        say("%s: %s\n", (LONG)what, (LONG)(err && *err ? err : "failed"));
 }
 
 /* ---- settings ------------------------------------------------------------------- */
@@ -95,7 +240,7 @@ static int load_settings(LONG *args, int *changed)
     config_defaults(&cfg);
     if (plat_read_file(CFG_PREFS_FILE, text, sizeof(text)) >= 0 &&
         config_parse(&cfg, text) != AD_OK)
-        Printf("Warning: invalid values in %s were ignored\n", (LONG)CFG_PREFS_FILE);
+        say("Warning: invalid values in %s were ignored\n", (LONG)CFG_PREFS_FILE);
 
     *changed = 0;
     for (i = 0; i < sizeof(setting_args) / sizeof(setting_args[0]); i++) {
@@ -103,7 +248,7 @@ static int load_settings(LONG *args, int *changed)
         if (!v)
             continue;
         if (config_set(&cfg, setting_args[i].key, v) != AD_OK) {
-            Printf("Invalid %s=%s\n", (LONG)setting_args[i].key, (LONG)v);
+            say("Invalid %s=%s\n", (LONG)setting_args[i].key, (LONG)v);
             return RETURN_ERROR;
         }
         *changed = 1;
@@ -117,10 +262,10 @@ static int save_settings(void)
 
     if (n < 0 || plat_make_dir(CFG_DIR) != AD_OK ||
         plat_write_file(CFG_PREFS_FILE, text, n) != AD_OK) {
-        Printf("Cannot save the settings to %s\n", (LONG)CFG_PREFS_FILE);
+        say("Cannot save the settings to %s\n", (LONG)CFG_PREFS_FILE);
         return RETURN_ERROR;
     }
-    Printf("Settings saved to %s\n", (LONG)CFG_PREFS_FILE);
+    say("Settings saved to %s\n", (LONG)CFG_PREFS_FILE);
     return RETURN_OK;
 }
 
@@ -129,7 +274,7 @@ static int start_network(void)
     char err[200];
 
     if (net_init(err, sizeof(err)) != AD_OK) {
-        Printf("Network: %s\n", (LONG)err);
+        say("Network: %s\n", (LONG)err);
         return RETURN_FAIL;
     }
     return RETURN_OK;
@@ -159,8 +304,8 @@ static int show_drive(void)
         print_rc("OneDrive", rc, err);
         return RETURN_ERROR;
     }
-    Printf("OneDrive:  %s (%s), ", (LONG)local_text(di.owner), (LONG)di.drive_type);
-    Printf("%lu.%lu of %lu.%lu GB used\n",
+    say("OneDrive:  %s (%s), ", (LONG)local_text(di.owner), (LONG)di.drive_type);
+    say("%lu.%lu of %lu.%lu GB used\n",
            di.used_mb / 1000, (di.used_mb % 1000) / 100, di.total_mb / 1000, (di.total_mb % 1000) / 100);
     return RETURN_OK;
 }
@@ -175,14 +320,14 @@ static int cmd_login(void)
 
     if ((rc = start_network()) != RETURN_OK)
         return rc;
-    Printf("Signing in to Microsoft (%s) ...\n", (LONG)cfg.tenant);
+    say("Signing in to Microsoft (%s) ...\n", (LONG)cfg.tenant);
     if ((rc = auth_device_start(&login_sess, &a, &device, err, sizeof(err))) != AD_OK) {
         print_rc("Sign-in", rc, err);
         return RETURN_ERROR;
     }
-    Printf("\nOn a phone or PC open   %s\n", (LONG)device.uri);
-    Printf("and enter the code      %s\n\n", (LONG)device.user_code);
-    Printf("Waiting (up to %ld minutes, Ctrl-C cancels) ...\n", device.expires_in / 60);
+    say("\nOn a phone or PC open   %s\n", (LONG)device.uri);
+    say("and enter the code      %s\n\n", (LONG)device.user_code);
+    say("Waiting (up to %ld minutes, Ctrl-C cancels) ...\n", device.expires_in / 60);
 
     rc = auth_device_wait(&login_sess, &a, &device, &tokens, err, sizeof(err));
     memset(&device, 0, sizeof(device));
@@ -191,17 +336,17 @@ static int cmd_login(void)
         return rc == AD_ERR_BREAK ? RETURN_WARN : RETURN_ERROR;
     }
     if (plat_make_dir(CFG_DIR) != AD_OK || auth_save(&tokens, CFG_TOKEN_FILE) != AD_OK) {
-        Printf("Signed in, but cannot save %s\n", (LONG)CFG_TOKEN_FILE);
+        say("Signed in, but cannot save %s\n", (LONG)CFG_TOKEN_FILE);
         return RETURN_ERROR;
     }
-    Printf("Signed in. Token saved to %s\n", (LONG)CFG_TOKEN_FILE);
+    say("Signed in. Token saved to %s\n", (LONG)CFG_TOKEN_FILE);
     return show_drive();
 }
 
 static int cmd_logout(void)
 {
     plat_delete_file(CFG_TOKEN_FILE);
-    Printf("Signed out (%s deleted). Run AmiDrive LOGIN to sign in again.\n", (LONG)CFG_TOKEN_FILE);
+    say("Signed out (%s deleted). Run AmiDrive LOGIN to sign in again.\n", (LONG)CFG_TOKEN_FILE);
     return RETURN_OK;
 }
 
@@ -209,20 +354,20 @@ static int cmd_info(void)
 {
     int rc;
 
-    Printf("%s %s\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_VERSION);
-    Printf("Local:     %s\n", (LONG)(cfg.local[0] ? cfg.local : "(not set, use LOCAL=)"));
-    Printf("Remote:    %s\n", (LONG)(cfg.remote[0] ? cfg.remote : "(not set, use REMOTE=)"));
-    Printf("Charset:   %s, check every %ld min, %s\n", (LONG)cfg.charset, cfg.interval,
+    say("%s %s\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_VERSION);
+    say("Local:     %s\n", (LONG)(cfg.local[0] ? cfg.local : "(not set, use LOCAL=)"));
+    say("Remote:    %s\n", (LONG)(cfg.remote[0] ? cfg.remote : "(not set, use REMOTE=)"));
+    say("Charset:   %s, check every %ld min, %s\n", (LONG)cfg.charset, cfg.interval,
            (LONG)(cfg.upload[0] == 'Y' ? "both ways" : "download only (UPLOAD=NO)"));
     if (cfg.state[0])
-        Printf("State:     %s\n", (LONG)cfg.state);
+        say("State:     %s\n", (LONG)cfg.state);
     else if (cfg.local[0])
-        Printf("State:     %s/.AmiDrive\n", (LONG)cfg.local);
-    Printf("App ID:    %s (%s)\n", (LONG)(cfg.client_id[0] ? cfg.client_id : "not set, use CLIENTID="),
+        say("State:     %s/.AmiDrive\n", (LONG)cfg.local);
+    say("App ID:    %s (%s)\n", (LONG)(cfg.client_id[0] ? cfg.client_id : "not set, use CLIENTID="),
            (LONG)cfg.tenant);
 
     if (auth_load(&tokens, CFG_TOKEN_FILE) != AD_OK) {
-        Printf("Sign-in:   not signed in, run AmiDrive LOGIN\n");
+        say("Sign-in:   not signed in, run AmiDrive LOGIN\n");
         return RETURN_WARN;
     }
     if ((rc = start_network()) != RETURN_OK)
@@ -237,12 +382,12 @@ static int test_get(Session *s, const char *path)
     long n, total = 0;
     int rc;
 
-    Printf("GET %s\n", (LONG)path);
+    say("GET %s\n", (LONG)path);
     if ((rc = sess_request(s, "GET", path, "Accept: application/json\r\n", NULL, 0)) != AD_OK) {
-        Printf("  failed: %s\n", (LONG)s->err);
+        say("  failed: %s\n", (LONG)s->err);
         return rc;
     }
-    Printf("  status %ld, %s, keep-alive %s\n", (LONG)s->http.status,
+    say("  status %ld, %s, keep-alive %s\n", (LONG)s->http.status,
            (LONG)(s->http.chunked ? "chunked" : s->http.until_close ? "until close" : "Content-Length"),
            (LONG)(s->http.keep_alive ? "yes" : "no"));
     while ((n = http_read_body(&s->http, body + total, (long)sizeof(body) - 1 - total)) > 0) {
@@ -253,7 +398,7 @@ static int test_get(Session *s, const char *path)
     if (n < 0)
         return (int)n;
     body[total] = '\0';
-    Printf("  body: %s\n", (LONG)body);
+    say("  body: %s\n", (LONG)body);
     rc = http_skip_body(&s->http);
     sess_done(s);
     return rc;
@@ -282,7 +427,7 @@ static const char *sync_token(void *ud, int force, int *rc, char *err, int errsi
 static void sync_log(void *ud, const char *msg)
 {
     (void)ud;
-    Printf("  %s\n", (LONG)msg);
+    note("  %s\n", (LONG)msg);
 }
 
 /* path + "/" + name ("/" left out after ':' or '/'); path has room for it */
@@ -302,32 +447,52 @@ static void print_time(void)
     tz_format_iso8601(plat_local_now(), iso);
     iso[10] = ' ';
     iso[16] = '\0';                     /* "YYYY-MM-DD HH:MM" */
-    Printf("%s ", (LONG)iso);
+    note("%s ", (LONG)iso);
 }
 
 /* Synchronise now (once) or every INTERVAL minutes until Ctrl-C. */
 static int cmd_sync(int once)
 {
-    static char remote[CFG_PATH_SIZE * 2], state_file[CFG_PATH_SIZE + 16];
+    static char remote[CFG_PATH_SIZE * 2], state_dir[CFG_PATH_SIZE + 16], state_file[CFG_PATH_SIZE + 24];
     FsCharset cs = cfg.charset[5] == '2' ? FS_LATIN2 : FS_LATIN1;
     SyncConfig sc;
     SyncStats ss;
     char err[200];
-    int rc;
+    int rc, fatal;
 
-    if (auth_load(&tokens, CFG_TOKEN_FILE) != AD_OK) {
-        Printf("Not signed in: run %s LOGIN first\n", (LONG)AMIDRIVE_NAME);
+    if (!instance_claim()) {
+        if (!wbmsg)
+            say("%s is already running (%s STOP stops it)\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_NAME);
+        else if (ask_stop())
+            signal_running(1);
         return RETURN_WARN;
     }
     if (fs_to_utf8(cs, cfg.remote, remote, sizeof(remote)) < 0) {
-        Printf("REMOTE too long\n");
+        say("REMOTE too long\n");
         return RETURN_ERROR;
     }
-    /* STATE=dir, else <LOCAL>/.AmiDrive; the file in it is "state" */
-    strcpy(state_file, cfg.state[0] ? cfg.state : cfg.local);
+    /* STATE=dir, else <LOCAL>/.AmiDrive; in it "state" and the log */
+    strcpy(state_dir, cfg.state[0] ? cfg.state : cfg.local);
     if (!cfg.state[0])
-        add_name(state_file, SYNC_STATE_DIR);
+        add_name(state_dir, SYNC_STATE_DIR);
+    strcpy(state_file, state_dir);
     add_name(state_file, "state");
+    strcpy(log_path, state_dir);
+    add_name(log_path, LOG_NAME);
+    plat_make_dir(cfg.local);
+    plat_make_dir(state_dir);
+    log_open();
+
+    if (auth_load(&tokens, CFG_TOKEN_FILE) != AD_OK) {
+        if (!wbmsg) {
+            say("Not signed in: run %s LOGIN first\n", (LONG)AMIDRIVE_NAME);
+            return RETURN_WARN;
+        }
+        log_close();                    /* started from the icon: sign in now, in the window */
+        if ((rc = cmd_login()) != RETURN_OK)
+            return rc;
+        log_open();
+    }
     if ((rc = start_network()) != RETURN_OK)
         return rc;
 
@@ -345,49 +510,82 @@ static int cmd_sync(int once)
 
     state_init(&state);
     if (state_load(&state, state_file) == AD_ERR_PROTO)
-        Printf("Warning: %s is damaged, the whole folder will be read again\n", (LONG)state_file);
+        say("Warning: %s is damaged, the whole folder will be read again\n", (LONG)state_file);
 
     for (;;) {
         plat_make_dir(cfg.local);
+        log_open();
         sc.maxname = plat_name_limit(cfg.local);
         print_time();
-        Printf("Checking OneDrive %s -> %s\n", (LONG)cfg.remote, (LONG)cfg.local);
+        note("Checking OneDrive %s -> %s\n", (LONG)cfg.remote, (LONG)cfg.local);
         rc = sync_run(&sc, &state, &ss, err, sizeof(err));
         /* the connections are not kept for minutes of waiting */
         sess_close(&graph_sess);
         sess_close(&dl_sess);
         sess_close(&login_sess);
 
+        fatal = rc == AD_ERR_BREAK || rc == AD_ERR_AUTH || rc == AD_ERR_NOTFOUND;
         if (rc == AD_OK) {
             if (ss.downloaded + ss.moved + ss.deleted + ss.folders + ss.kept + ss.failed +
                 ss.uploaded + ss.remote_moved + ss.remote_deleted + ss.remote_folders == 0) {
-                Printf("  no changes\n");
+                note("  no changes\n");
             } else {
-                Printf("  Amiga:    %ld downloaded (%lu KB), %ld moved, %ld deleted, %ld new folders\n",
-                       ss.downloaded, (ss.bytes + 1023) / 1024, ss.moved, ss.deleted, ss.folders);
+                note("  Amiga:    %ld downloaded (%lu KB), %ld moved, %ld deleted, %ld new folders\n",
+                     ss.downloaded, (ss.bytes + 1023) / 1024, ss.moved, ss.deleted, ss.folders);
                 if (sc.upload)
-                    Printf("  OneDrive: %ld uploaded (%lu KB), %ld moved, %ld deleted, %ld new folders\n",
-                           ss.uploaded, (ss.up_bytes + 1023) / 1024, ss.remote_moved,
-                           ss.remote_deleted, ss.remote_folders);
+                    note("  OneDrive: %ld uploaded (%lu KB), %ld moved, %ld deleted, %ld new folders\n",
+                         ss.uploaded, (ss.up_bytes + 1023) / 1024, ss.remote_moved,
+                         ss.remote_deleted, ss.remote_folders);
                 if (ss.kept + ss.failed)
-                    Printf("  %ld kept (changed on the Amiga), %ld failed (tried again next time)\n",
-                           ss.kept, ss.failed);
+                    note("  %ld kept (changed on the Amiga), %ld failed (tried again next time)\n",
+                         ss.kept, ss.failed);
             }
-        } else {
-            print_rc("  Stopped", rc, err);
-            if (rc == AD_ERR_BREAK || rc == AD_ERR_AUTH || rc == AD_ERR_NOTFOUND)
-                break;
-        }
-        if (once || plat_sleep(cfg.interval * 60) != AD_OK)
+        } else if (fatal) {             /* these end the program: always shown (Ctrl-C below) */
+            if (rc != AD_ERR_BREAK)
+                print_rc("  Stopped", rc, err);
             break;
+        } else {                        /* tried again after INTERVAL */
+            note("  Stopped: %s\n", (LONG)(*err ? err : "failed"));
+        }
+        if (once)
+            break;
+        log_close();                    /* readable while waiting */
+        if (plat_sleep(cfg.interval * 60) != AD_OK) {
+            rc = AD_ERR_BREAK;
+            break;
+        }
     }
     if (rc == AD_ERR_AUTH)
-        Printf("Sign in again: %s LOGIN\n", (LONG)AMIDRIVE_NAME);
-    if (rc == AD_ERR_BREAK)
+        say("Sign in again: %s LOGIN\n", (LONG)AMIDRIVE_NAME);
+    if (rc == AD_ERR_BREAK) {
+        log_open();
+        print_time();
+        note("Stopped (Ctrl-C)\n");
         return RETURN_WARN;
+    }
     if (rc != AD_OK)
         return RETURN_ERROR;
     return ss.failed ? RETURN_WARN : RETURN_OK;
+}
+
+/* AmiDrive STOP: Ctrl-C to the running synchronisation, wait until it has ended */
+static int cmd_stop(void)
+{
+    int i;
+
+    if (!signal_running(1)) {
+        say("%s is not running\n", (LONG)AMIDRIVE_NAME);
+        return RETURN_WARN;
+    }
+    say("Stopping %s ...\n", (LONG)AMIDRIVE_NAME);
+    for (i = 0; i < 120 && signal_running(0); i++)        /* up to 60 s */
+        Delay(TICKS_PER_SECOND / 2);
+    if (signal_running(0)) {
+        say("Still running (busy with a request); it stops after it\n");
+        return RETURN_WARN;
+    }
+    say("Stopped\n");
+    return RETURN_OK;
 }
 
 /* Write a small sync state to T:, read it back, delete it: the streamed, safely
@@ -416,7 +614,7 @@ static int test_state_file(void)
          strcmp(f->name, "tab\tname") == 0 && strcmp(st.root_id, "ROOT!1") == 0;
     state_free(&st);
     plat_delete_file(path);
-    Printf("State file (%s): %s\n", (LONG)path, (LONG)(ok ? "OK" : "FAILED"));
+    say("State file (%s): %s\n", (LONG)path, (LONG)(ok ? "OK" : "FAILED"));
     if (!ok)
         return AD_ERR;
 
@@ -433,8 +631,8 @@ static int test_state_file(void)
              !info.dir && plat_file_info(part, &info) != AD_OK && plat_file_info("T:", &info) == AD_OK &&
              info.dir;
         plat_delete_file(done);
-        Printf("Files (create, date, rename, examine): %s\n", (LONG)(ok ? "OK" : "FAILED"));
-        Printf("Name limit: SYS: %ld, RAM: %ld characters\n\n",
+        say("Files (create, date, rename, examine): %s\n", (LONG)(ok ? "OK" : "FAILED"));
+        say("Name limit: SYS: %ld, RAM: %ld characters\n\n",
                (LONG)plat_name_limit("SYS:"), (LONG)plat_name_limit("RAM:"));
     }
     return ok ? AD_OK : AD_ERR;
@@ -449,32 +647,32 @@ static int cmd_test(const char *host, const char *tzsrc)
     Session *s = &graph_sess;
     int rc;
 
-    Printf("%s %s self test\n\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_VERSION);
-    Printf("Time zone: %s\n", (LONG)tzsrc);
+    say("%s %s self test\n\n", (LONG)AMIDRIVE_NAME, (LONG)AMIDRIVE_VERSION);
+    say("Time zone: %s\n", (LONG)tzsrc);
     tz_format_iso8601(local, iso);
     iso[19] = '\0';
-    Printf("Local:     %s (UTC%s%ld:%02ld)\n", (LONG)iso, (LONG)(off < 0 ? "-" : "+"),  /* no %+ld */
+    say("Local:     %s (UTC%s%ld:%02ld)\n", (LONG)iso, (LONG)(off < 0 ? "-" : "+"),  /* no %+ld */
            (LONG)((off < 0 ? -off : off) / 60), (LONG)((off < 0 ? -off : off) % 60));
     tz_format_iso8601(utc, iso);
-    Printf("UTC:       %s\n\n", (LONG)iso);
+    say("UTC:       %s\n\n", (LONG)iso);
     if (test_state_file() != AD_OK)
         return RETURN_ERROR;
 
     if ((rc = start_network()) != RETURN_OK)
         return rc;
-    Printf("bsdsocket.library %ld.%ld, AmiSSL ready\n",
+    say("bsdsocket.library %ld.%ld, AmiSSL ready\n",
            (LONG)SocketBase->lib_Version, (LONG)SocketBase->lib_Revision);
 
     sess_init(s, host);
     DateStamp(&t0);
-    Printf("Connecting to %s:443 ...\n", (LONG)host);
+    say("Connecting to %s:443 ...\n", (LONG)host);
     if (!(s->conn = net_connect(host, 443, SESS_TIMEOUT, s->err, sizeof(s->err)))) {
-        Printf("  failed: %s\n", (LONG)s->err);
+        say("  failed: %s\n", (LONG)s->err);
         return RETURN_ERROR;
     }
     http_init(&s->http, s->conn);
     s->fresh = 1;
-    Printf("  %s, certificate OK, %ld ms\n\n", (LONG)net_tls_info(s->conn), ticks_since(&t0) * 20);
+    say("  %s, certificate OK, %ld ms\n\n", (LONG)net_tls_info(s->conn), ticks_since(&t0) * 20);
 
     if (strcmp(host, AD_GRAPH_HOST) != 0)                 /* other host: one request */
         return test_get(s, "/") == AD_OK ? RETURN_OK : RETURN_ERROR;
@@ -484,26 +682,119 @@ static int cmd_test(const char *host, const char *tzsrc)
         int reused = s->conn != NULL;
         DateStamp(&t0);
         rc = test_get(s, "/v1.0/me");
-        Printf("  second request (%s connection): %ld ms\n",
+        say("  second request (%s connection): %ld ms\n",
                (LONG)(reused ? "same" : "new"), ticks_since(&t0) * 20);
     }
     if (rc != AD_OK) {
-        Printf("\nTest FAILED (%ld)\n", (LONG)rc);
+        say("\nTest FAILED (%ld)\n", (LONG)rc);
         return RETURN_ERROR;
     }
-    Printf("\nTest OK (/me answers 401 without a token)\n");
+    say("\nTest OK (/me answers 401 without a token)\n");
     return RETURN_OK;
 }
 
-int main(void)
+/* ---- Workbench: the Tool Types as arguments ------------------------------------- */
+
+/* 1 if the Tool Type ("KEY" or "KEY=value") names an argument of TEMPLATE */
+static int template_key(const char *tt)
+{
+    const char *t = TEMPLATE;
+    size_t n = 0;
+
+    while (tt[n] && tt[n] != '=')
+        n++;
+    while (*t) {
+        size_t k = 0;
+        while (t[k] && t[k] != '/' && t[k] != ',')
+            k++;
+        if (k == n && n > 0) {
+            size_t i;
+            for (i = 0; i < n; i++)
+                if ((tt[i] & ~0x20) != t[i])            /* keys are upper case letters */
+                    break;
+            if (i == n)
+                return 1;
+        }
+        while (*t && *t != ',')
+            t++;
+        if (*t)
+            t++;
+    }
+    return 0;
+}
+
+/* The Tool Types of our icon as a command line for ReadArgs: KEY="value" SWITCH ...
+ * Tool Types that are not ours (TOOLPRI, DONOTWAIT, "(LOCAL=...)") are left out. */
+static struct RDArgs *wb_args(LONG *args)
+{
+    static char line[1024];
+    struct Library *IconBase = OpenLibrary((STRPTR)"icon.library", 36);
+    struct DiskObject *dob;
+    struct RDArgs *rda;
+    size_t len = 0;
+
+    line[0] = '\0';
+    if (IconBase) {
+        BPTR old = CurrentDir(wbmsg->sm_ArgList[0].wa_Lock);
+        if ((dob = GetDiskObject(wbmsg->sm_ArgList[0].wa_Name)) != NULL) {
+            STRPTR *tt;
+            for (tt = (STRPTR *)dob->do_ToolTypes; tt && *tt; tt++) {
+                const char *s = (const char *)*tt, *eq = strchr(s, '=');
+                if (!template_key(s) || len + strlen(s) + 4 >= sizeof(line))
+                    continue;
+                if (eq) {               /* KEY="value": values may contain spaces */
+                    memcpy(line + len, s, (size_t)(eq - s) + 1);
+                    len += (size_t)(eq - s) + 1;
+                    line[len++] = '"';
+                    for (s = eq + 1; *s; s++)
+                        if (*s != '"')
+                            line[len++] = *s;
+                    line[len++] = '"';
+                } else {
+                    strcpy(line + len, s);
+                    len += strlen(s);
+                }
+                line[len++] = ' ';
+                line[len] = '\0';
+            }
+            FreeDiskObject(dob);
+        }
+        CurrentDir(old);
+        CloseLibrary(IconBase);
+    }
+    line[len++] = '\n';                 /* ReadArgs wants the line end */
+    line[len] = '\0';
+
+    if (!(rda = (struct RDArgs *)AllocDosObject(DOS_RDARGS, NULL)))
+        return NULL;
+    rda->RDA_Source.CS_Buffer = (STRPTR)line;
+    rda->RDA_Source.CS_Length = (LONG)len;
+    rda->RDA_Source.CS_CurChr = 0;
+    rda->RDA_Flags |= RDAF_NOPROMPT;
+    if (!ReadArgs((STRPTR)TEMPLATE, args, rda)) {
+        PrintFault(IoErr(), (STRPTR)AMIDRIVE_NAME " Tool Types");
+        FreeDosObject(DOS_RDARGS, rda);
+        return NULL;
+    }
+    return rda;
+}
+
+int main(int argc, char **argv)
 {
     LONG args[ARG_COUNT];
     struct RDArgs *rda;
+    BPTR win = 0, oldout = 0;
     char tzsrc[80];
     int rc, changed;
 
     memset(args, 0, sizeof(args));
-    if (!(rda = ReadArgs(TEMPLATE, args, NULL))) {
+    if (argc == 0) {                    /* Workbench: output to a window, Tool Types */
+        wbmsg = (struct WBStartup *)argv;
+        if ((win = Open((STRPTR)WB_WINDOW, MODE_NEWFILE)) != 0)
+            oldout = SelectOutput(win);
+        rda = wb_args(args);
+        quiet = !args[ARG_WINDOW];
+    } else if (!(rda = ReadArgs((STRPTR)TEMPLATE, args, NULL))) {
         PrintFault(IoErr(), (STRPTR)AMIDRIVE_NAME);
         return RETURN_FAIL;
     }
@@ -513,12 +804,18 @@ int main(void)
     sess_init(&graph_sess, AD_GRAPH_HOST);
     sess_init(&dl_sess, NULL);             /* host from each download redirect */
 
-    rc = load_settings(args, &changed);
-    if (rc == RETURN_OK && changed)
-        rc = save_settings();
+    if (!rda) {
+        rc = RETURN_FAIL;                  /* invalid Tool Types (reported) */
+    } else {
+        rc = load_settings(args, &changed);
+        if (rc == RETURN_OK && changed && !wbmsg)      /* Tool Types are not saved */
+            rc = save_settings();
+    }
 
     if (rc != RETURN_OK) {
         /* invalid argument or settings not saved */
+    } else if (args[ARG_STOP]) {
+        rc = cmd_stop();
     } else if (args[ARG_TEST]) {
         rc = cmd_test(args[ARG_HOST] ? (const char *)args[ARG_HOST] : AD_GRAPH_HOST, tzsrc);
     } else if (args[ARG_LOGIN]) {
@@ -528,15 +825,21 @@ int main(void)
     } else if (args[ARG_INFO]) {
         rc = cmd_info();
     } else if (!cfg.local[0] || !cfg.remote[0]) {
-        Printf("Set the folders first: %s LOCAL=<Amiga directory> REMOTE=<OneDrive folder>\n",
-               (LONG)AMIDRIVE_NAME);
+        if (wbmsg)
+            say("Set the folders first: Tool Types LOCAL=<Amiga directory> and\n"
+                "REMOTE=<OneDrive folder> in the icon (Icons > Information...)\n");
+        else
+            say("Set the folders first: %s LOCAL=<Amiga directory> REMOTE=<OneDrive folder>\n",
+                (LONG)AMIDRIVE_NAME);
         rc = RETURN_WARN;
     } else {
         rc = cmd_sync(args[ARG_ONCE] != 0);
     }
 
     if (plat_break())
-        Printf("*** Break\n");
+        note("*** Break\n");
+    log_close();
+    instance_release();
     sess_close(&login_sess);
     sess_close(&graph_sess);
     sess_close(&dl_sess);
@@ -545,6 +848,14 @@ int main(void)
     net_cleanup();
     if (LocaleBase)
         CloseLibrary((struct Library *)LocaleBase);
-    FreeArgs(rda);
+    if (rda) {
+        FreeArgs(rda);
+        if (wbmsg)
+            FreeDosObject(DOS_RDARGS, rda);
+    }
+    if (win) {                          /* WAIT: an opened window stays until closed */
+        SelectOutput(oldout);
+        Close(win);
+    }
     return rc;
 }

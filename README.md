@@ -9,8 +9,8 @@ przez internet z szyfrowaniem TLS.
 Pliki wrzucone do folderu OneDrive na telefonie lub PC same pojawiają się na Amidze: dyskietki
 ADF, moduły, obrazki, dokumenty. AmiDrive działa w tle i co kilka minut pyta OneDrive o zmiany
 (tylko o różnice od ostatniego razu), pobiera nowe i zmienione pliki, usuwa i przenosi te, które
-zmieniły się w chmurze. Później (etap 2) także w drugą stronę – z Amigi do chmury, z wykrywaniem
-konfliktów.
+zmieniły się w chmurze. Działa też w drugą stronę – zmiany zrobione na Amidze wysyła do chmury,
+a przy konflikcie zachowuje obie wersje.
 
 Założenia:
 
@@ -28,8 +28,9 @@ Technika: C (vbcc), `bsdsocket.library` (Roadshow), AmiSSL 5 (OpenSSL 3), własn
 z keep-alive, parser JSON jsmn, Microsoft Graph API (`/delta`, pobieranie, wysyłanie w sesjach).
 Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawem testów.
 
-**Stan (wersja 0.1.0):** działa sieć, TLS, HTTP, JSON, nazwy plików, czas, ustawienia i logowanie
-(czeka na rejestrację aplikacji w Microsoft Entra ID); synchronizacja w przygotowaniu.
+**Stan (wersja 0.2.0):** synchronizacja w obie strony działa na A1200 z prawdziwym kontem
+(OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
+start z ikony.
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md).
 
 ## Wymagania na Amidze
@@ -44,15 +45,25 @@ Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.m
 AmiDrive LOGIN                        logowanie kodem urządzenia (telefon / PC)
 AmiDrive LOGOUT                       zapomina logowanie (usuwa token)
 AmiDrive INFO                         ustawienia, stan logowania, właściciel i zajętość OneDrive
-AmiDrive LOCAL=Work:OneDrive REMOTE=/Amiga [CHARSET=LATIN2] [INTERVAL=3]
-                                      ustawia i zapamiętuje foldery (synchronizacja w przygotowaniu)
-AmiDrive [ONCE]                       synchronizacja z zapamiętanymi ustawieniami
+AmiDrive LOCAL=Work:OneDrive REMOTE=/Amiga [CHARSET=LATIN2] [INTERVAL=3] [UPLOAD=YES|NO]
+                                      ustawia i zapamiętuje foldery, synchronizuje
+AmiDrive                              praca w tle: synchronizacja co INTERVAL minut, Ctrl-C kończy
+AmiDrive ONCE                         jedno przejście
+AmiDrive STOP                         zatrzymuje AmiDrive działający w tle (czeka na koniec)
 AmiDrive TEST                         sprawdza zegar, strefę czasową, DNS, TLS i HTTP
 AmiDrive TEST HOST=badssl.com         to samo dla innego serwera (sprawdzanie certyfikatów)
 ```
 
 Ustawienia: `ENVARC:AmiDrive/AmiDrive.prefs` (podane w Shellu są zapisywane), token logowania:
-`ENVARC:AmiDrive/token` (tajny – nie udostępniać), stan synchronizacji: `<LOCAL>/.AmiDrive/`.
+`ENVARC:AmiDrive/token` (tajny – nie udostępniać), stan synchronizacji i dziennik
+`AmiDrive.log`: `<LOCAL>/.AmiDrive/`. Naraz działa tylko jedna synchronizacja.
+
+**Z ikony (Workbench):** Tool Types to te same opcje co w Shellu (`LOCAL=`, `REMOTE=`, `ONCE`,
+`INTERVAL=`…, wyłączone w nawiasach), mają pierwszeństwo przed plikiem ustawień, ale nie są
+zapisywane. AmiDrive pracuje w tle bez okna; okno pojawia się tylko przy błędzie albo logowaniu
+(pierwszy start bez logowania od razu pokazuje kod), a z Tool Type `WINDOW` pokazuje też postęp.
+Ponowne kliknięcie ikony pyta, czy zatrzymać. Ikona w `WBStartup` (ma `DONOTWAIT`) uruchamia
+AmiDrive przy starcie systemu.
 Opcje `CLIENTID=` i `TENANT=` (`common`, `consumers`, `organizations`) wskazują aplikację w Microsoft
 Entra ID, przez którą AmiDrive się loguje.
 
@@ -73,6 +84,14 @@ make tests                    # build/amiga/AmiDriveTests (testy dla Amigi)
 make -f Makefile.host test    # testy modułów przenośnych na PC
 ```
 
+Ikona (Python z Pillow, z Git Bash / PowerShell; w Git Bash `MSYS_NO_PATHCONV=1`, inaczej
+`/Amiga` zamienia się w ścieżkę Windows):
+
+```sh
+python tools/make_icon.py build/amiga/AmiDrive.info --tooltypes "(LOCAL=Work:OneDrive)" \
+    "(REMOTE=/Amiga)" "(INTERVAL=3)" "(UPLOAD=YES)" "(CHARSET=LATIN2)" "(ONCE)" "(WINDOW)" DONOTWAIT
+```
+
 Na Amigę (AmiAgent, katalog `Work:AmiDrive`), z Git Bash albo PowerShell:
 
 ```sh
@@ -86,7 +105,7 @@ python tools/amiga_remote.py run "Work:AmiDrive/AmiDriveTests"
 
 | Plik | Zawartość |
 |---|---|
-| `src/main.c` | argumenty (`ReadArgs`), polecenia `LOGIN`/`LOGOUT`/`INFO`/`TEST` |
+| `src/main.c` | argumenty (`ReadArgs`, Tool Types), polecenia, pętla synchronizacji, dziennik |
 | `src/net_amiga.c` | gniazda Roadshow + AmiSSL, weryfikacja certyfikatu |
 | `src/plat_amiga.c` | czas, strefa z `TZ` / Locale, czekanie z Ctrl-C, bezpieczny zapis plików |
 | `src/auth.c` | logowanie kodem urządzenia, odświeżanie i zapis tokenu (przenośny) |
@@ -99,4 +118,7 @@ python tools/amiga_remote.py run "Work:AmiDrive/AmiDriveTests"
 | `src/tz.c` | daty ISO 8601, strefy POSIX z czasem letnim (przenośny) |
 | `tests/` | testy modułów przenośnych (PC i Amiga) |
 | `third_party/jsmn/` | parser JSON jsmn (MIT) |
+| `src/sync.c`, `src/state.c` | synchronizacja w obie strony, baza stanu (przenośne) |
 | `tools/amiga_remote.py` | klient AmiAgent |
+| `tools/make_icon.py`, `tools/icon_tooltypes.py` | ikona `AmiDrive.info`, Tool Types |
+| `tools/amiga/WBRun.c` | start programu jak z ikony (testy przez AmiAgent) |
