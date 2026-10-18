@@ -15,7 +15,7 @@ Archive layout:
     Install-AmiDrive(.info)          Installer script, default tool Installer
     AmiDrive(.info)                  the program
     Docs/(.info)                     AmiDrive.txt, AmiDrive_en.txt, *_release*.txt (+icons),
-                                     AmiDrive-opis.pdf
+                                     AmiDrive-opis.pdf, AmiDrive-description.pdf
     WBStartup/AmiDrive(.info)        autostart icon template (default tool set by the installer)
     Icons/OneDrive-sync.info         the "OneDrive" icon while synchronising
 """
@@ -73,7 +73,8 @@ def build(ver):
     for d in DOCS:
         amiga_text(os.path.join(ROOT, "docs", "release", "amiga", d), os.path.join(out, "Docs", d))
         make_icon.save_icon(os.path.join(out, "Docs", d + ".info"), "doc", default_tool=VIEWER)
-    shutil.copy(os.path.join(ROOT, "docs", "AmiDrive-opis.pdf"), os.path.join(out, "Docs"))
+    for pdf in ("AmiDrive-opis.pdf", "AmiDrive-description.pdf"):
+        shutil.copy(os.path.join(ROOT, "docs", pdf), os.path.join(out, "Docs"))
 
     with open(os.path.join(out, "WBStartup", "AmiDrive"), "wb") as f:
         f.write(b"AmiDrive autostart: the icon starts AmiDrive in the background\n"

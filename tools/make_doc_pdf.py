@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Build docs/AmiDrive-opis.pdf: how AmiDrive works, how it runs on the A1200 now and
-what another user has to do to use it with their own OneDrive (in Polish).
+"""Build docs/AmiDrive-opis.pdf (Polish) and docs/AmiDrive-description.pdf (English): how
+AmiDrive works, how it runs on the A1200 now and what another user has to do to use it
+with their own OneDrive.
 
-  python tools/make_doc_pdf.py [OUT.pdf]
+  python tools/make_doc_pdf.py [pl] [en]       (no argument: both)
 
 Needs reportlab and Pillow (pip install reportlab pillow) and the Arial / Consolas fonts
 of Windows (Polish letters). The icon is drawn by tools/make_icon.py.
@@ -95,15 +96,6 @@ def icon_image():
     path = os.path.join(tempfile.gettempdir(), "amidrive_icon_doc.png")
     img.resize((w * 4, h * 4), make_icon.Image.NEAREST).save(path)       # transparent PNG
     return Image(path, width=26 * mm, height=26 * mm * h / w)
-
-
-def footer(canvas, doc):
-    canvas.saveState()
-    canvas.setFont("Arial", 8)
-    canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.4.2 – opis działania i instalacji")
-    canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
-    canvas.restoreState()
 
 
 def content():
@@ -310,8 +302,7 @@ def content():
                "wbudowany w program: <font name='Consolas'>0474e444-3266-446b-b49c-d47a01cadf56</font>, "
                "dla kont prywatnych i firmowych dowolnej organizacji)."))
     s += bullets([
-        "<b>Konto prywatne</b> – wystarczy zalogować się i zaakceptować zgodę. (Do tej pory "
-        "AmiDrive był sprawdzany z kontem firmowym; z kontem prywatnym jeszcze nie.)",
+        "<b>Konto prywatne</b> – wystarczy zalogować się i zaakceptować zgodę.",
         "<b>Konto firmowe innej organizacji</b> – administrator może blokować aplikacje spoza "
         "organizacji. Wtedy logowanie kończy się prośbą o zgodę administratora. Rozwiązania: "
         "administrator zatwierdza aplikację <i>AmiDrive</i> (Enterprise applications → Grant admin "
@@ -405,13 +396,338 @@ def content():
     return s
 
 
-def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "docs", "AmiDrive-opis.pdf")
+def content_en():
+    """the same document in English"""
+    s = []
+    head = Table([[icon_image(), [P("AmiDrive", title),
+                                  P("OneDrive client for AmigaOS 3.x – how it works, how it runs on "
+                                    "the A1200 and a guide for a new user", subtitle)]]],
+                 colWidths=[30 * mm, 140 * mm])
+    head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    s += [head, Spacer(1, 4),
+          P("Program version 0.4.2, document of 18 October 2026.", small), Spacer(1, 6)]
+
+    # ---------------------------------------------------------------- 1
+    s.append(P("1. What AmiDrive is", h1))
+    s.append(P("AmiDrive is a native Amiga program that synchronises <b>one chosen OneDrive folder</b> "
+               "with a directory on the Amiga's disk. It connects directly to Microsoft Graph over "
+               "the Internet (HTTPS, TLS 1.2/1.3) – no PC, Raspberry Pi or rclone needed. Files put "
+               "into that folder on a phone or PC appear on the Amiga, and files changed on the "
+               "Amiga go to the cloud."))
+    s += bullets([
+        "Amiga: AmigaOS 3.x, 68020 or faster, aims at 2–4 MB of Fast RAM.",
+        "Network: any TCP/IP stack with <font name='Consolas'>bsdsocket.library</font> (Roadshow, "
+        "AmiTCP, Miami); encryption by AmiSSL 5.",
+        "Sign-in with a device code: the Microsoft account password never reaches the Amiga.",
+        "Runs in the background: checks for changes every few minutes, only the differences "
+        "since the last time.",
+    ])
+
+    # ---------------------------------------------------------------- 2
+    s.append(P("2. How it works", h1))
+    s.append(P("One <b>synchronisation pass</b> goes like this:", body))
+    s += steps([
+        "<b>Token.</b> The program reads the token from <font name='Consolas'>ENVARC:AmiDrive/token</font>; "
+        "when it has expired (after about 1 h) it renews it at Microsoft and saves the new one.",
+        "<b>Changes in the cloud.</b> A <font name='Consolas'>/delta</font> request for the synchronised "
+        "folder. The first time OneDrive returns the whole content, later only the differences since "
+        "the remembered point (deltaLink). Answers are read in pages of 20 items to fit in little memory.",
+        "<b>Download to the Amiga.</b> New and changed files are streamed into a temporary file in "
+        "the same directory and only then put in place; the file date is the one from the cloud. "
+        "Moves and renames are done locally, without downloading again. Deleted in the cloud – "
+        "deleted on the Amiga.",
+        "<b>Changes on the Amiga.</b> The program scans the local directory and compares it with "
+        "the state database (size and date of each file after the last synchronisation). New files "
+        "and folders are uploaded, changed files are uploaded as new versions, moved ones are moved "
+        "in the cloud, deleted ones are deleted (they go to the OneDrive recycle bin).",
+        "<b>State.</b> The state database (<font name='Consolas'>.AmiDrive/state</font>) is saved "
+        "safely: into a temporary file, then swapped in. The new delta point is remembered only "
+        "after a pass without errors – a file that failed comes back in the next pass.",
+    ])
+    s.append(P("Conflicts and data safety", h2))
+    s.append(table([
+        ["Situation", "What AmiDrive does"],
+        ["File changed both on the Amiga and in the cloud",
+         "The cloud version gets the proper name, the Amiga version stays as "
+         "<i>name-Amiga.ext</i> and is uploaded as a separate file. Nothing is lost."],
+        ["File deleted on the Amiga but changed in the cloud", "The file comes back from the cloud."],
+        ["File deleted in the cloud but changed on the Amiga", "The file on the Amiga stays."],
+        ["Most files missing locally (e.g. a disk not mounted)",
+         "When more than 10 items and more than half are missing, nothing is deleted in the "
+         "cloud and the log has a warning."],
+        ["Interruption (Ctrl-C, reset, no network)",
+         "The state stays consistent; the next pass finishes the interrupted work."],
+    ], [62 * mm, 108 * mm]))
+    s.append(Spacer(1, 6))
+    s.append(P("File names", h2))
+    s += bullets([
+        "OneDrive uses UTF-8, the Amiga Latin-1 or Latin-2 (<font name='Consolas'>CHARSET=LATIN2</font> "
+        "for Central European letters). Characters outside the character set become “_”.",
+        "Names longer than the disk allows (OFS/FFS: 30 characters) are shortened to "
+        "<i>start~hhhhhh.ext</i>; the full cloud name is kept in the state database.",
+        "Amiga protection bits and file comments are not transferred (OneDrive does not know them).",
+        "Skipped: OneNote notebooks, items shared from someone else's drive, files of 4 GB and more, "
+        "the <font name='Consolas'>.AmiDrive</font> directory.",
+    ])
+
+    # ---------------------------------------------------------------- 3
+    s.append(P("3. How AmiDrive runs on the author's A1200", h1))
+    s.append(P("State of 18 October 2026 (A1200, 68060, AmigaOS 3.2.2, Roadshow, AmiSSL 5.24, "
+               "OneDrive for Business):"))
+    s.append(table([
+        ["What", "Where / value"],
+        ["Program and icon", "<font name='Consolas'>Work:AmiDrive/AmiDrive</font>, "
+                             "<font name='Consolas'>Work:AmiDrive/AmiDrive.info</font>"],
+        ["Autostart", "<font name='Consolas'>SystemSD:WBStartup/AmiDrive.info</font> (project icon: "
+                      "default tool <font name='Consolas'>Work:AmiDrive/AmiDrive</font>, "
+                      "DONOTWAIT) and a short text file <font name='Consolas'>SystemSD:WBStartup/AmiDrive</font>"],
+        ["Synchronised cloud folder", "<font name='Consolas'>/Retro/AmigaDrive</font>"],
+        ["Directory on the Amiga", "<font name='Consolas'>Work:OneDrive</font>"],
+        ["Settings", "<font name='Consolas'>ENVARC:AmiDrive/AmiDrive.prefs</font>: LOCAL, REMOTE, "
+                     "CHARSET=LATIN2, INTERVAL=3, PAUSE=YES (upload on – the default)"],
+        ["Sign-in token (secret)", "<font name='Consolas'>ENVARC:AmiDrive/token</font>"],
+        ["State and log", "<font name='Consolas'>Work:OneDrive/.AmiDrive/state</font>, "
+                          "<font name='Consolas'>Work:OneDrive/.AmiDrive/AmiDrive.log</font>"],
+        ["Time zone", "<font name='Consolas'>TZ=CET-1CEST,M3.5.0,M10.5.0/3</font> (with summer time)"],
+    ], [52 * mm, 118 * mm]))
+    s.append(Spacer(1, 6))
+    s.append(P("How it is started", h2))
+    s.append(P("AmiDrive <b>starts by itself with the Workbench</b>: "
+               "<font name='Consolas'>SystemSD:WBStartup</font> holds a project icon that starts "
+               "the program in <font name='Consolas'>Work:AmiDrive</font> (no second copy of the "
+               "program – a new version in <font name='Consolas'>Work:AmiDrive</font> is used by the "
+               "autostart at once). The network is already up then (<font name='Consolas'>S:User-Startup</font>). "
+               "The Tool Types of the program icon are switched off (in brackets), so the settings come "
+               "from the prefs file. The program runs <b>in the background, without a window</b>. "
+               "<font name='Consolas'>PAUSE=YES</font> is set: after the start AmiDrive <b>waits "
+               "paused</b> (“Paused”, as after <i>Stop</i>) and checks and sends nothing until "
+               "<i>Sync now</i> in the window or the <i>Tools</i> menu; from then on it makes a pass "
+               "every 3 minutes and writes it to the log. A window appears only for an error or a sign-in."))
+    s.append(P("The “OneDrive” icon on the Workbench", h2))
+    s.append(P("While AmiDrive runs in the background, the Workbench shows a <b>OneDrive</b> icon "
+               "(a cloud; with orange round arrows during a synchronisation):"))
+    s += bullets([
+        "<b>double-click</b> opens the synchronised directory <font name='Consolas'>Work:OneDrive</font> "
+        "(AmigaOS 3.5 or newer; from 3.9/3.2 as a list of all files by name) "
+        "and the <b>AmiDrive window</b> with the buttons <i>Sync now</i>, "
+        "<i>Stop</i> (pauses the synchronisation) and <i>Quit</i> (ends the program) – at once, also "
+        "during a synchronisation; then the window shows the progress: a bar with percent, the current "
+        "file, the speed and the estimated time left (Workbench 3.2 has no icon menu on the right button);",
+        "<b>files and drawers dropped on the icon</b> are copied into that directory and uploaded "
+        "to the cloud at once;",
+        "<i>Tools</i> menu: <b>AmiDrive: status</b> (the progress window, or the result of the last "
+        "check and the time of the next one), <b>AmiDrive: synchronise now</b> (a pass now) and "
+        "<b>AmiDrive: quit</b> (ends the background work, the icon goes away).",
+    ])
+    s.append(P("The Workbench chooses the place of the icon (the first free one in the icon column – "
+               "it may be hidden by a window). Without the icon: <font name='Consolas'>APPICON=NO</font>."))
+    s.append(P("Everyday use", h2))
+    s.append(table([
+        ["Task", "How"],
+        ["Run in the background", "Double-click the <i>AmiDrive</i> icon, or in a Shell: "
+                                  "<font name='Consolas'>Run &gt;NIL: Work:AmiDrive/AmiDrive</font>"],
+        ["End it", "The <i>Quit</i> button, menu <i>Tools → AmiDrive: quit</i>, double-click the program "
+                   "icon again → <i>Stop</i>, or in a Shell <font name='Consolas'>Work:AmiDrive/AmiDrive STOP</font>"],
+        ["One pass now", "Menu <i>Tools → AmiDrive: synchronise now</i> (while it runs in the background), "
+                         "or <font name='Consolas'>Work:AmiDrive/AmiDrive ONCE</font>"],
+        ["What happened", "<font name='Consolas'>Type Work:OneDrive/.AmiDrive/AmiDrive.log</font>"],
+        ["Account and settings", "<font name='Consolas'>Work:AmiDrive/AmiDrive INFO</font>"],
+        ["Switch off the autostart", "Delete <font name='Consolas'>SystemSD:WBStartup/AmiDrive</font> and "
+                                     "<font name='Consolas'>AmiDrive.info</font> from that directory"],
+    ], [42 * mm, 128 * mm]))
+    s.append(Spacer(1, 4))
+    s.append(P("Only one synchronisation can run at a time: a second copy started from a Shell ends "
+               "with “already running”, one started from the icon asks whether to stop the running one.",
+               body))
+
+    # ---------------------------------------------------------------- 4
+    s.append(P("4. What another user has to do (their own OneDrive)", h1))
+    s.append(P("Requirements", h2))
+    s += bullets([
+        "AmigaOS 3.x (tested on 3.2.2), 68020 or newer, a few MB of Fast RAM.",
+        "A working TCP/IP stack with <font name='Consolas'>bsdsocket.library</font> v4 (Roadshow "
+        "recommended) and an Internet connection (network card, PCMCIA WiFi, Plipbox…).",
+        "AmiSSL 5.24 or newer (with the certificates in <font name='Consolas'>AmiSSL:Certs</font>).",
+        "A Microsoft account with OneDrive: personal (outlook.com, hotmail, live) or work/school "
+        "(Microsoft 365).",
+    ])
+    s.append(P("Step by step", h2))
+    s += steps([
+        "<b>Clock and time zone.</b> Set the correct date and time (without it TLS rejects the "
+        "servers' certificates). For example Central Europe with summer time:",
+    ])
+    s.append(C("SetEnv SAVE TZ CET-1CEST,M3.5.0,M10.5.0/3"))
+    s += [Paragraph(t, bullet, bulletText=f"{i}.") for i, t in enumerate([
+        "<b>Installation.</b> Copy <font name='Consolas'>AmiDrive</font> and "
+        "<font name='Consolas'>AmiDrive.info</font> to any directory, e.g. "
+        "<font name='Consolas'>Work:AmiDrive</font>.",
+        "<b>Folder in OneDrive.</b> In the browser or the OneDrive app create the folder to be "
+        "synchronised, e.g. <font name='Consolas'>Amiga</font>. It must exist – AmiDrive does not "
+        "create it (message “OneDrive folder … not found”). Best start with a folder with few files.",
+        "<b>Sign-in.</b> In a Shell <font name='Consolas'>AmiDrive LOGIN</font> (or just click the "
+        "icon – without a sign-in the program opens a window by itself). On a phone or PC open "
+        "<font name='Consolas'>https://login.microsoft.com/device</font>, enter the code from the "
+        "Amiga screen, sign in and allow the <i>AmiDrive</i> app to access your files. The token is "
+        "saved in <font name='Consolas'>ENVARC:AmiDrive/token</font>.",
+        "<b>Settings</b> (remembered):",
+    ], 2)]
+    s.append(C("AmiDrive LOCAL=Work:OneDrive REMOTE=/Amiga CHARSET=LATIN2 ONCE"))
+    s.append(P("This first pass downloads the content of the folder. Instead of the Shell the same "
+               "options can be put in the Tool Types of the icon (<i>Icons → Information…</i>, "
+               "remove the brackets).", body))
+    s += [Paragraph(t, bullet, bulletText=f"{i}.") for i, t in enumerate([
+        "<b>Background and autostart.</b> Click the icon or <font name='Consolas'>Run &gt;NIL: AmiDrive</font>. "
+        "Autostart: copy the program with its icon to <font name='Consolas'>SYS:WBStartup</font> (the "
+        "icon has DONOTWAIT) or – as on the A1200 – put a project icon there with the default tool "
+        "pointing at the program (<font name='Consolas'>tools/make_icon.py --project</font>). "
+        "To make AmiDrive wait for <i>Sync now</i> after the start: <font name='Consolas'>AmiDrive PAUSE=YES</font>.",
+    ], 6)]
+    s.append(P("The installer (<i>Install-AmiDrive</i>) asks for all of this by itself: the program "
+               "drawer, the directory for the files, the OneDrive folder, the character set, how often "
+               "to check, the direction, the “OneDrive” icon, the clock, the time zone, the autostart "
+               "and what to do after the start (synchronise at once or wait paused until "
+               "<i>Sync now</i>).", body))
+    s.append(P("Several OneDrive accounts", h2))
+    s.append(P("AmiDrive handles up to 3 accounts (e.g. work and personal); one is synchronised at "
+               "a time. In the active AmiDrive window the right mouse button shows the <b>Account</b> "
+               "menu: the accounts (the active one ticked, “(start)” at the start account), "
+               "<i>Start with this account</i> (AmiDrive always starts with it; without it – with the "
+               "last one used), <i>Sign in...</i> and <i>Sign out</i>. Choosing an empty account shows "
+               "the sign-in code in the window, then asks for the drawer on the Amiga and the folder in "
+               "that OneDrive. Each account has its own drawer, folder and token (account 1: "
+               "<font name='Consolas'>AmiDrive.prefs</font> and <font name='Consolas'>token</font>, "
+               "accounts 2–3: <font name='Consolas'>Account2.prefs</font>, <font name='Consolas'>token2</font> …). "
+               "In a Shell: <font name='Consolas'>AmiDrive ACCOUNT=2</font>."))
+    s.append(P("Personal and work accounts – the app registration", h2))
+    s.append(P("AmiDrive signs in through an app registered in Microsoft Entra ID (the ID built into "
+               "the program: <font name='Consolas'>0474e444-3266-446b-b49c-d47a01cadf56</font>, "
+               "for personal accounts and work accounts of any organisation)."))
+    s += bullets([
+        "<b>Personal account</b> – just sign in and accept the consent.",
+        "<b>Work account of another organisation</b> – the administrator may block apps from outside "
+        "the organisation. Then the sign-in ends with a request for admin consent. Solutions: the "
+        "administrator approves the <i>AmiDrive</i> app (Enterprise applications → Grant admin "
+        "consent), or the organisation registers its own app as below.",
+    ])
+    s.append(KeepTogether([
+        P("Your own app registration (Entra portal or Azure Portal):", body),
+        *steps([
+            "<i>App registrations → New registration</i>; name e.g. AmiDrive; account types: this "
+            "organisation only, or any organisation and personal accounts.",
+            "<i>Authentication → Advanced settings → Allow public client flows: Yes</i> "
+            "(device code sign-in, no secret).",
+            "<i>API permissions → Microsoft Graph → Delegated</i>: <b>Files.ReadWrite</b> and "
+            "<b>offline_access</b> (optionally admin consent for the whole organisation).",
+            "Copy the <i>Application (client) ID</i> and the <i>Directory (tenant) ID</i>, then on the Amiga:",
+        ]),
+        C("AmiDrive CLIENTID=<client-id> TENANT=<tenant-id or organizations>\nAmiDrive LOGIN"),
+    ]))
+    s.append(P("Speed", h2))
+    s.append(P("On the Amiga the speed is limited by the encryption, not by the network. Measured on "
+               "the A1200 (68060/50, Ethernet of the Warp card), the same 5 MB file:"))
+    s.append(table([
+        ["Connection", "Speed"],
+        ["no encryption (http)", "1590 KB/s"],
+        ["TLS 1.3, AES-256-GCM", "215 KB/s"],
+        ["TLS 1.3, ChaCha20-Poly1305", "337 KB/s"],
+        ["OneDrive, full synchronisation of 20 MB (AES-128 – Microsoft's choice)",
+         "192 KB/s (108 s; with AES-256: 130 s)"],
+    ], [110 * mm, 60 * mm]))
+    s.append(Spacer(1, 4))
+    s.append(P("AmiDrive offers the ciphers fastest on the 68k (ChaCha20, then AES-128), all fully "
+               "secure. Your own measurement: <font name='Consolas'>AmiDrive TEST URL=https://…</font>."))
+    s.append(P("Security", h2))
+    s += bullets([
+        "The file <font name='Consolas'>ENVARC:AmiDrive/token</font> gives access to the files in "
+        "OneDrive – do not share it or copy it to other computers. <font name='Consolas'>AmiDrive LOGOUT</font> "
+        "deletes it from the Amiga; access can also be revoked in the Microsoft account (Apps and services).",
+        "Server certificates are always checked; tokens never go into the log.",
+    ])
+
+    # ---------------------------------------------------------------- 5
+    s.append(P("5. Options", h1))
+    s.append(P("The same in a Shell and in the Tool Types of the icon. Precedence: Shell, then Tool "
+               "Types, then the settings file. Only options given in a Shell are saved."))
+    s.append(table([
+        ["Option", "Meaning"],
+        ["LOCAL=directory", "directory on the Amiga, e.g. Work:OneDrive (created when missing)"],
+        ["REMOTE=/folder", "folder in OneDrive, e.g. /Amiga (must exist)"],
+        ["CHARSET=LATIN1|LATIN2", "character set of names on the Amiga (default LATIN1)"],
+        ["INTERVAL=min", "minutes between checks in the background (default 3)"],
+        ["UPLOAD=YES|NO", "NO – download from the cloud only, no upload (default YES)"],
+        ["STATE=directory", "another place for the state database and the log (default LOCAL/.AmiDrive)"],
+        ["ONCE", "one pass, then end"],
+        ["WINDOW", "(from the icon) a window with the progress"],
+        ["APPICON=YES|NO", "the “OneDrive” icon on the Workbench while running in the background (default YES)"],
+        ["PAUSE=YES|NO", "YES – start paused (“Paused”), the first check only after "
+                         "<i>Sync now</i> (default NO); the installer asks about it too"],
+        ["CLOCK=ASK|AUTO|NO", "wrong Amiga clock: a window asking (default) / set it at the start and "
+                              "once a day / do not check"],
+        ["SETCLOCK", "sets the Amiga clock (and the battery clock) from the Internet"],
+        ["STOP", "stops the AmiDrive running in the background"],
+        ["LOGIN / LOGOUT / INFO", "sign in, sign out, account and settings"],
+        ["TEST", "checks the clock, time zone, DNS, TLS and the connection to Microsoft Graph"],
+        ["CLIENTID= / TENANT=", "your own app registration (chapter 4)"],
+        ["ACCOUNT=1|2|3", "the active OneDrive account (remembered); in the window: menu Account"],
+        ["START=0|1|2|3", "the account to start with (0: the last one used); menu Start with this account"],
+    ], [48 * mm, 122 * mm]))
+
+    # ---------------------------------------------------------------- 6
+    s.append(P("6. Problems and limits", h1))
+    s.append(table([
+        ["Message / symptom", "Cause and advice"],
+        ["Not signed in", "no token: AmiDrive LOGIN"],
+        ["Sign in again", "the token expired or access was revoked (e.g. password change): AmiDrive LOGIN"],
+        ["OneDrive folder … not found", "wrong REMOTE path or the folder does not exist"],
+        ["certificate rejected, check the Amiga clock",
+         "wrong Amiga clock: AmiDrive shows a window with the time from the Internet and a "
+         "<i>Set clock</i> button (CLOCK=ASK) or sets it by itself (CLOCK=AUTO); by hand: AmiDrive SETCLOCK"],
+        ["certificate rejected (other)", "missing or old AmiSSL certificates – update AmiSSL; AmiDrive TEST"],
+        ["already running", "another copy is synchronising: AmiDrive STOP"],
+        ["A file ending in -Amiga", "a conflict – both versions are kept, choose the right one"],
+    ], [52 * mm, 118 * mm]))
+    s.append(Spacer(1, 6))
+    s += bullets([
+        "An interrupted download or upload of a large file starts again from the beginning (no resume).",
+        "Renaming a folder on the Amiga: a new folder is created in the cloud, the files are moved "
+        "into it (without uploading), the old one is deleted.",
+        "One synchronised folder; files up to 4 GB; summer time only from the TZ variable.",
+        "An AmiDrive process hung after a crash blocks a new start until the Amiga is restarted.",
+    ])
+    return s
+
+
+# language -> file, footer, page word, metadata, content
+DOCS = {
+    "pl": ("AmiDrive-opis.pdf", "AmiDrive 0.4.2 – opis działania i instalacji", "strona",
+           "AmiDrive – opis", "Klient OneDrive dla AmigaOS", content),
+    "en": ("AmiDrive-description.pdf", "AmiDrive 0.4.2 – how it works and how to install it", "page",
+           "AmiDrive – description", "OneDrive client for AmigaOS", content_en),
+}
+
+
+def build(lang, out):
+    _, foot, page, doc_title, subject, make = DOCS[lang]
+
+    def footer_lang(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Arial", 8)
+        canvas.setFillColor(colors.HexColor("#777777"))
+        canvas.drawString(18 * mm, 10 * mm, foot)
+        canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"{page} {doc.page}")
+        canvas.restoreState()
+
     doc = SimpleDocTemplate(out, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
-                            topMargin=16 * mm, bottomMargin=18 * mm, title="AmiDrive – opis",
-                            author="AmiDrive", subject="Klient OneDrive dla AmigaOS")
-    doc.build(content(), onFirstPage=footer, onLaterPages=footer)
+                            topMargin=16 * mm, bottomMargin=18 * mm, title=doc_title,
+                            author="AmiDrive", subject=subject)
+    doc.build(make(), onFirstPage=footer_lang, onLaterPages=footer_lang)
     print(out)
+
+
+def main():
+    langs = [a for a in sys.argv[1:] if a in DOCS] or list(DOCS)
+    for lang in langs:
+        build(lang, os.path.join(ROOT, "docs", DOCS[lang][0]))
 
 
 if __name__ == "__main__":

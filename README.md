@@ -32,7 +32,7 @@ Logika niezależna od systemu jest testowana na PC i na Amidze tym samym zestawe
 (OneDrive for Business): pobieranie, wysyłanie, przenoszenie, usuwanie, konflikty, praca w tle,
 start z ikony, autostart z `WBStartup`, ikona „OneDrive” na pulpicie Workbencha.
 Szczegóły: [docs/STATUS.md](docs/STATUS.md), założenia: [CLAUDE.md](CLAUDE.md), opis działania
-i instalacji dla użytkownika: [docs/AmiDrive-opis.pdf](docs/AmiDrive-opis.pdf) (`tools/make_doc_pdf.py`).
+i instalacji dla użytkownika: [docs/AmiDrive-opis.pdf](docs/AmiDrive-opis.pdf), po angielsku [docs/AmiDrive-description.pdf](docs/AmiDrive-description.pdf) (`tools/make_doc_pdf.py`).
 
 ## Instalacja na Amidze
 
