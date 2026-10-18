@@ -26,6 +26,7 @@ typedef struct {
     char upload[4];                     /* YES: changes on the Amiga are sent | NO */
     char clock[8];                      /* ASK: window when the clock is wrong | AUTO | NO */
     char appicon[4];                    /* YES: "OneDrive" icon on the Workbench while running | NO */
+    char pause[4];                      /* YES: start paused (no checks until "Sync now") | NO */
     long interval;                      /* minutes */
     char client_id[48];
     char tenant[40];

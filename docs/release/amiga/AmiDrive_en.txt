@@ -102,6 +102,8 @@ Options (Shell and Tool Types of the program icon)
   INTERVAL=min           minutes between checks (default 3)
   UPLOAD=YES|NO          NO: download from the cloud only
   APPICON=YES|NO         the "OneDrive" icon on the Workbench
+  PAUSE=YES|NO           YES: start paused ("Paused") - the first check
+                         only after "Sync now"
   CLOCK=ASK|AUTO|NO      wrong clock: window / set it / nothing
   STATE=drawer           another place for the state and the log
   WINDOW                 (from the icon) a window with the progress

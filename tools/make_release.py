@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import make_icon  # noqa: E402
 
 PROG_TOOLTYPES = ["(LOCAL=Work:OneDrive)", "(REMOTE=/Amiga)", "(INTERVAL=3)", "(UPLOAD=YES)",
-                  "(CHARSET=LATIN2)", "(APPICON=YES)", "(ONCE)", "(WINDOW)", "DONOTWAIT"]
+                  "(CHARSET=LATIN2)", "(APPICON=YES)", "(PAUSE=NO)", "(ONCE)", "(WINDOW)", "DONOTWAIT"]
 DOCS = ["AmiDrive.txt", "AmiDrive_en.txt", "AmiDrive_release.txt", "AmiDrive_release_en.txt"]
 VIEWER = "SYS:Utilities/MultiView"
 

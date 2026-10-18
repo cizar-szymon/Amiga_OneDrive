@@ -4,6 +4,7 @@
  *            [UPLOAD=YES|NO]                 YES: also send the changes made on the Amiga
  *            [INTERVAL=3] [STATE=dir]       synchronise (settings are remembered)
  *            [APPICON=YES|NO]               YES: "OneDrive" icon on the Workbench in the background
+ *            [PAUSE=YES|NO]                 YES: start paused, the first check on "Sync now"
  *   AmiDrive LOGIN          sign in with a device code
  *   AmiDrive LOGOUT         forget the sign-in (deletes the token file)
  *   AmiDrive INFO           settings, sign-in state, OneDrive owner and space
@@ -74,10 +75,10 @@ char amidrive_version[] = "$VER: " AMIDRIVE_NAME " " AMIDRIVE_VERSION " (" AMIDR
 
 #define TEMPLATE "LOCAL/K,REMOTE/K,ONCE/S,CHARSET/K,UPLOAD/K,INTERVAL/K,STATE/K,CLIENTID/K,TENANT/K," \
                  "LOGIN/S,LOGOUT/S,INFO/S,TEST/S,HOST/K,WINDOW/S,STOP/S,APPICON/K,CLOCK/K,SETCLOCK/S," \
-                 "URL/K,TO/K,RCVBUF/K/N,ACCOUNT/K,START/K"
+                 "URL/K,TO/K,RCVBUF/K/N,ACCOUNT/K,START/K,PAUSE/K"
 enum { ARG_LOCAL, ARG_REMOTE, ARG_ONCE, ARG_CHARSET, ARG_UPLOAD, ARG_INTERVAL, ARG_STATE, ARG_CLIENTID,
        ARG_TENANT, ARG_LOGIN, ARG_LOGOUT, ARG_INFO, ARG_TEST, ARG_HOST, ARG_WINDOW, ARG_STOP, ARG_APPICON,
-       ARG_CLOCK, ARG_SETCLOCK, ARG_URL, ARG_TO, ARG_RCVBUF, ARG_ACCOUNT, ARG_START,
+       ARG_CLOCK, ARG_SETCLOCK, ARG_URL, ARG_TO, ARG_RCVBUF, ARG_ACCOUNT, ARG_START, ARG_PAUSE,
        ARG_COUNT };
 
 /* the output window when started from Workbench: opens on the first output */
@@ -91,7 +92,7 @@ static const struct { int arg; const char *key; } setting_args[] = {
     { ARG_LOCAL, "LOCAL" }, { ARG_REMOTE, "REMOTE" }, { ARG_CHARSET, "CHARSET" }, { ARG_UPLOAD, "UPLOAD" },
     { ARG_INTERVAL, "INTERVAL" }, { ARG_STATE, "STATE" }, { ARG_CLIENTID, "CLIENTID" },
     { ARG_TENANT, "TENANT" }, { ARG_APPICON, "APPICON" }, { ARG_CLOCK, "CLOCK" },
-    { ARG_START, "START" }
+    { ARG_START, "START" }, { ARG_PAUSE, "PAUSE" }
 };
 
 struct LocaleBase *LocaleBase;
@@ -347,6 +348,7 @@ static int save_settings(void)
     strcpy(g.charset, cfg.charset);
     strcpy(g.upload, cfg.upload);
     strcpy(g.appicon, cfg.appicon);
+    strcpy(g.pause, cfg.pause);
     strcpy(g.clock, cfg.clock);
     g.interval = cfg.interval;
     strcpy(g.client_id, cfg.client_id);
@@ -663,6 +665,8 @@ static int cmd_info(void)
                                    cfg.clock[1] == 'U' ? "set automatically from the Internet (CLOCK=AUTO)" :
                                    "window when it is wrong (CLOCK=ASK)"));
     say("AppIcon:   %s\n", (LONG)(cfg.appicon[0] == 'Y' ? "\"OneDrive\" on the Workbench" : "no (APPICON=NO)"));
+    say("Start:     %s\n", (LONG)(cfg.pause[0] == 'Y' ? "paused until Sync now (PAUSE=YES)" :
+                                   "checks at once (PAUSE=NO)"));
     if (cfg.state[0])
         say("State:     %s\n", (LONG)cfg.state);
     else if (cfg.local[0])
@@ -765,7 +769,7 @@ static struct {
     long last_draw;                     /* ticks since phase_start */
 } pg;
 static char last_result[120];           /* "12:31 no changes", for the idle window */
-static int paused;                      /* "Stop": no automatic checks until "Sync now" */
+static int paused;                      /* "Stop", PAUSE=YES: no automatic checks until "Sync now" */
 static int stop_pass;                   /* "Stop" pressed during a pass: end it, go on */
 static unsigned long next_check;        /* local time of the next pass, 0 = none */
 
@@ -1405,6 +1409,13 @@ static int cmd_sync(int once)
         }
     }
     rc = AD_OK;
+    if (!once && cfg.pause[0] == 'Y') {     /* PAUSE=YES: the first pass on "Sync now" */
+        paused = 1;
+        log_open();
+        print_time();
+        note("Started paused (PAUSE=YES): no checks until Sync now\n");
+        log_close();
+    }
 
     for (;;) {
         if (quit_req) {
@@ -1427,6 +1438,14 @@ static int cmd_sync(int once)
             status_open();
             show_idle();
             log_close();
+            if (wait_next(0) == AD_ERR_BREAK) {
+                rc = AD_ERR_BREAK;
+                break;
+            }
+            continue;
+        }
+        if (paused) {                   /* PAUSE=YES at the start: wait for "Sync now" */
+            show_idle();
             if (wait_next(0) == AD_ERR_BREAK) {
                 rc = AD_ERR_BREAK;
                 break;

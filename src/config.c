@@ -74,6 +74,7 @@ void config_defaults(Config *c)
     strcpy(c->charset, "LATIN1");
     strcpy(c->upload, "YES");
     strcpy(c->appicon, "YES");
+    strcpy(c->pause, "NO");
     strcpy(c->clock, "ASK");
     c->account = 1;
     c->interval = CFG_INTERVAL_DEFAULT;
@@ -126,10 +127,11 @@ int config_set(Config *c, const char *key, const char *value)
         strcpy(c->charset, eq_ci(value, "LATIN1") ? "LATIN1" : "LATIN2");
         return AD_OK;
     }
-    if (eq_ci(key, "UPLOAD") || eq_ci(key, "APPICON")) {
+    if (eq_ci(key, "UPLOAD") || eq_ci(key, "APPICON") || eq_ci(key, "PAUSE")) {
         if (!eq_ci(value, "YES") && !eq_ci(value, "NO"))
             return AD_ERR_PROTO;
-        strcpy(eq_ci(key, "UPLOAD") ? c->upload : c->appicon, eq_ci(value, "YES") ? "YES" : "NO");
+        strcpy(eq_ci(key, "UPLOAD") ? c->upload : eq_ci(key, "PAUSE") ? c->pause : c->appicon,
+               eq_ci(value, "YES") ? "YES" : "NO");
         return AD_OK;
     }
     if (eq_ci(key, "CLOCK")) {
@@ -165,7 +167,7 @@ int config_set(Config *c, const char *key, const char *value)
 int config_parse(Config *c, const char *text)
 {
     static const char *const keys[] = {
-        "LOCAL", "REMOTE", "STATE", "CHARSET", "UPLOAD", "APPICON", "CLOCK", "INTERVAL", "CLIENTID", "ACCOUNT", "START", "NAME",
+        "LOCAL", "REMOTE", "STATE", "CHARSET", "UPLOAD", "APPICON", "PAUSE", "CLOCK", "INTERVAL", "CLIENTID", "ACCOUNT", "START", "NAME",
         "TENANT", NULL
     };
     char value[CFG_PATH_SIZE];
@@ -220,6 +222,7 @@ int config_format(const Config *c, char *buf, size_t size)
         !append(buf, size, &len, "CHARSET", c->charset) ||
         !append(buf, size, &len, "UPLOAD", c->upload) ||
         !append(buf, size, &len, "APPICON", c->appicon) ||
+        !append(buf, size, &len, "PAUSE", c->pause) ||
         !append(buf, size, &len, "CLOCK", c->clock) ||
         !append(buf, size, &len, "INTERVAL", num + i) ||
         !append(buf, size, &len, "CLIENTID", c->client_id) ||

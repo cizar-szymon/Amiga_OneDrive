@@ -103,6 +103,8 @@ Opcje (Shell i Tool Types ikony programu)
   INTERVAL=min           co ile minut sprawdzać (domyślnie 3)
   UPLOAD=YES|NO          NO: tylko pobieranie z chmury
   APPICON=YES|NO         ikona "OneDrive" na pulpicie
+  PAUSE=YES|NO           YES: start w pauzie ("Paused") - pierwsze
+                         sprawdzenie dopiero po "Sync now"
   CLOCK=ASK|AUTO|NO      zły zegar: okno z pytaniem / ustaw sam / nic
   STATE=szuflada         inne miejsce stanu i dziennika
   WINDOW                 (z ikony) okno z bieżącym postępem

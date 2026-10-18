@@ -28,6 +28,23 @@ void test_config(void)
     }
     CHECK_INT(config_set(&c, "UPLOAD", "YES"), AD_OK);
 
+    /* PAUSE: NO by default, YES/NO only */
+    CHECK_STR(c.pause, "NO");
+    CHECK_INT(config_set(&c, "pause", "yes"), AD_OK);
+    CHECK_STR(c.pause, "YES");
+    CHECK_INT(config_set(&c, "PAUSE", "1"), AD_ERR_PROTO);
+    CHECK_STR(c.pause, "YES");
+    {
+        Config u;
+        char t[1024];
+        CHECK(config_format(&c, t, sizeof(t)) > 0);
+        CHECK(strstr(t, "PAUSE=YES\n") != NULL);
+        config_defaults(&u);
+        CHECK_INT(config_parse(&u, t), AD_OK);
+        CHECK_STR(u.pause, "YES");
+    }
+    CHECK_INT(config_set(&c, "PAUSE", "NO"), AD_OK);
+
     /* APPICON: YES by default, YES/NO only, survives format -> parse */
     CHECK_STR(c.appicon, "YES");
     CHECK_INT(config_set(&c, "appicon", "No"), AD_OK);
