@@ -101,7 +101,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Arial", 8)
     canvas.setFillColor(colors.HexColor("#777777"))
-    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.4.1 – opis działania i instalacji")
+    canvas.drawString(18 * mm, 10 * mm, "AmiDrive 0.4.2 – opis działania i instalacji")
     canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"strona {doc.page}")
     canvas.restoreState()
 
@@ -114,7 +114,7 @@ def content():
                  colWidths=[30 * mm, 140 * mm])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     s += [head, Spacer(1, 4),
-          P("Wersja programu 0.4.1, dokument z 14.10.2026.", small), Spacer(1, 6)]
+          P("Wersja programu 0.4.2, dokument z 18.10.2026.", small), Spacer(1, 6)]
 
     # ---------------------------------------------------------------- 1
     s.append(P("1. Czym jest AmiDrive", h1))
@@ -180,7 +180,7 @@ def content():
 
     # ---------------------------------------------------------------- 3
     s.append(P("3. Jak AmiDrive działa teraz na A1200", h1))
-    s.append(P("Stan z 14.10.2026 (A1200, 68060, AmigaOS 3.2.2, Roadshow, AmiSSL 5.24, "
+    s.append(P("Stan z 18.10.2026 (A1200, 68060, AmigaOS 3.2.2, Roadshow, AmiSSL 5.24, "
                "OneDrive for Business):"))
     s.append(table([
         ["Co", "Gdzie / wartość"],
@@ -192,7 +192,7 @@ def content():
         ["Synchronizowany folder w chmurze", "<font name='Consolas'>/Retro/AmigaDrive</font>"],
         ["Katalog na Amidze", "<font name='Consolas'>Work:OneDrive</font>"],
         ["Ustawienia", "<font name='Consolas'>ENVARC:AmiDrive/AmiDrive.prefs</font>: LOCAL, REMOTE, "
-                       "CHARSET=LATIN2, INTERVAL=3 (wysyłanie włączone – domyślnie)"],
+                       "CHARSET=LATIN2, INTERVAL=3, PAUSE=YES (wysyłanie włączone – domyślnie)"],
         ["Token logowania (tajny)", "<font name='Consolas'>ENVARC:AmiDrive/token</font>"],
         ["Stan i dziennik", "<font name='Consolas'>Work:OneDrive/.AmiDrive/state</font>, "
                             "<font name='Consolas'>Work:OneDrive/.AmiDrive/AmiDrive.log</font>"],
@@ -206,7 +206,10 @@ def content():
                "nowa wersja w <font name='Consolas'>Work:AmiDrive</font> od razu działa też przy "
                "autostarcie). Sieć jest już wtedy uruchomiona (<font name='Consolas'>S:User-Startup</font>). "
                "Tool Types ikony programu są wyłączone (w nawiasach), więc ustawienia pochodzą z pliku "
-               "prefs. Program pracuje <b>w tle, bez okna</b>: co 3 minuty robi przejście i zapisuje "
+               "prefs. Program pracuje <b>w tle, bez okna</b>. Ustawione jest "
+               "<font name='Consolas'>PAUSE=YES</font>: po starcie AmiDrive <b>czeka w pauzie</b> "
+               "(„Paused”, jak po <i>Stop</i>) i nic nie sprawdza ani nie wysyła, aż do <i>Sync now</i> "
+               "w oknie lub w menu <i>Narzędzia</i>; od tej chwili co 3 minuty robi przejście i zapisuje "
                "je do dziennika. Okno pojawia się tylko przy błędzie albo logowaniu."))
     s.append(P("Ikona „OneDrive” na pulpicie", h2))
     s.append(P("Dopóki AmiDrive pracuje w tle, na pulpicie Workbencha jest ikona <b>OneDrive</b> "
@@ -284,8 +287,13 @@ def content():
         "<b>Praca w tle i autostart.</b> Kliknij ikonę albo <font name='Consolas'>Run &gt;NIL: AmiDrive</font>. "
         "Autostart: skopiuj program z ikoną do <font name='Consolas'>SYS:WBStartup</font> (ikona ma "
         "DONOTWAIT) albo – jak na A1200 – połóż tam ikonę projektu z narzędziem domyślnym "
-        "wskazującym program (<font name='Consolas'>tools/make_icon.py --project</font>).",
+        "wskazującym program (<font name='Consolas'>tools/make_icon.py --project</font>). "
+        "Żeby po starcie AmiDrive czekał na <i>Sync now</i>: <font name='Consolas'>AmiDrive PAUSE=YES</font>.",
     ], 6)]
+    s.append(P("Instalator (<i>Install-AmiDrive</i>) pyta o to wszystko sam: o szufladę programu, "
+               "katalog na pliki, folder w OneDrive, stronę kodową, częstotliwość, kierunek, ikonę "
+               "„OneDrive”, zegar, strefę czasową, autostart i o to, co robić po uruchomieniu "
+               "(synchronizować od razu albo czekać w pauzie do <i>Sync now</i>).", body))
     s.append(P("Kilka kont OneDrive", h2))
     s.append(P("AmiDrive obsługuje do 3 kont (np. firmowe i prywatne); synchronizowane jest jedno "
                "naraz. W aktywnym oknie AmiDrive prawy przycisk pokazuje menu <b>Account</b>: lista "
@@ -359,6 +367,8 @@ def content():
         ["ONCE", "jedno przejście i koniec"],
         ["WINDOW", "(z ikony) okno z bieżącym postępem"],
         ["APPICON=YES|NO", "ikona „OneDrive” na pulpicie w pracy w tle (domyślnie YES)"],
+        ["PAUSE=YES|NO", "YES – start w pauzie („Paused”), pierwsze sprawdzenie dopiero po "
+                         "<i>Sync now</i> (domyślnie NO); pyta o to też instalator"],
         ["CLOCK=ASK|AUTO|NO", "zły zegar Amigi: okno z pytaniem (domyślnie) / ustaw sam przy starcie i "
                               "raz na dobę / nie sprawdzaj"],
         ["SETCLOCK", "ustawia zegar Amigi (i zegar z baterią) czasem z internetu"],

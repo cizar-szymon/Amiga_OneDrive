@@ -31,6 +31,8 @@ Instalacja
      w obie strony czy tylko pobieranie, ikona "OneDrive" na pulpicie,
    - zegar Amigi (ustawiać automatycznie z internetu / pytać / nie
      sprawdzać), autostart,
+   - zawsze: co robić po uruchomieniu - synchronizować od razu albo czekać
+     w pauzie do "Sync now" (PAUSE=YES),
    - zawsze: strefa czasowa (zmienna TZ z czasem letnim; pokazuje aktualny
      zegar i obecne ustawienie) i czy ustawić zegar teraz z internetu.
 4. Na koniec AmiDrive może się od razu uruchomić. Przy pierwszym starcie

@@ -31,6 +31,8 @@ Installation
      only, the "OneDrive" icon on the Workbench,
    - the Amiga clock (set it from the Internet / ask / do not check),
      autostart,
+   - always: what to do after the start - synchronise at once or wait paused
+     until "Sync now" (PAUSE=YES),
    - always: the time zone (TZ variable with summer time; it shows the clock
      and the current setting) and whether to set the clock from the net now.
 4. At the end AmiDrive can start at once. On the first start it shows a

@@ -10,6 +10,7 @@ the log <drawer with the files>/.AmiDrive/AmiDrive.log (it holds no tokens).
 - PAUSE=YES: AmiDrive starts paused (as after "Stop") - it checks and
   sends nothing until "Sync now" in the window or in the icon menu.
   The setting is remembered (AmiDrive PAUSE=YES in a Shell, or a Tool Type).
+  The installer always asks about it (the current setting is the default).
 
 0.4.1 (14.10.2026)
 ------------------

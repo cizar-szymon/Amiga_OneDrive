@@ -10,6 +10,7 @@ dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
 - PAUSE=YES: AmiDrive startuje w pauzie (jak po "Stop") - nic nie
   sprawdza ani nie wysyła, aż do "Sync now" w oknie lub w menu ikony.
   Ustawienie zapamiętywane (AmiDrive PAUSE=YES w Shellu albo Tool Type).
+  Instalator pyta o to zawsze (domyślnie obecne ustawienie).
 
 0.4.1 (14.10.2026)
 ------------------

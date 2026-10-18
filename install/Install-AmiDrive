@@ -313,6 +313,28 @@
         (delete "SYS:WBStartup/AmiDrive.info" (optional "force"))
         (delete "SYS:WBStartup/AmiDrive" (optional "force"))))))
 
+; ---- start paused (PAUSE=YES|NO), always asked; the default is the current setting --
+
+(set #pausedef
+  (if (= (run "Search ENVARC:AmiDrive/AmiDrive.prefs \"PAUSE=YES\" QUIET >NIL:" (safe)) 0) 1 0))
+(set #pause
+  (askchoice
+    (prompt (if #pl "Co AmiDrive ma robić zaraz po uruchomieniu?"
+                    "What should AmiDrive do right after it starts?"))
+    (help (if #pl (cat "Synchronizuj od razu: pierwsze sprawdzenie zaraz po starcie, potem co ustaloną "
+                       "liczbę minut. Czekaj w pauzie: AmiDrive startuje jako \"Paused\" (jak po Stop) i nic "
+                       "nie sprawdza ani nie wysyła, aż do \"Sync now\" w oknie lub w menu ikony. "
+                       "Ustawienie PAUSE=YES|NO, później: AmiDrive PAUSE=NO w Shellu.")
+                  (cat "Synchronise at once: the first check right after the start, then every few "
+                       "minutes. Wait paused: AmiDrive starts \"Paused\" (as after Stop) and checks and "
+                       "sends nothing until \"Sync now\" in the window or the icon menu. Setting "
+                       "PAUSE=YES|NO, later: AmiDrive PAUSE=NO in a Shell.")))
+    (choices (if #pl "Synchronizuj od razu" "Synchronise at once")
+             (if #pl "Czekaj w pauzie do \"Sync now\"" "Wait paused until \"Sync now\""))
+    (default #pausedef)))
+; STOP only stops a running copy (none now)
+(run (cat "\"" #prog "\" PAUSE=" (if (= #pause 1) "YES" "NO") " STOP >NIL:"))
+
 (complete 90)
 
 ; ---- first start -----------------------------------------------------------------
