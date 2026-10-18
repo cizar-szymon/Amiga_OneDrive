@@ -22,6 +22,7 @@ Instalacja
 1. Rozpakuj archiwum, np. do RAM:.
 2. Kliknij dwa razy ikonę "Install-AmiDrive".
 3. Instalator zapyta:
+   - o język instalatora (polski / angielski; domyślnie język systemu),
    - gdzie zainstalować program (powstanie szuflada AmiDrive),
    - gdzie trzymać pliki z OneDrive (dysk lub szuflada + nazwa, np.
      Work:OneDrive),

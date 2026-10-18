@@ -1,8 +1,8 @@
 ; Install-AmiDrive - Installer script for AmiDrive (OneDrive client for AmigaOS 3.x)
 ;
 ; Run from its icon (default tool Installer, APPNAME=AmiDrive, MINUSER=AVERAGE).
-; Texts in Polish when the Locale language is "polski", else in English. This file is
-; kept in UTF-8 in the repository; tools/make_release.py writes it in ISO-8859-2.
+; First asks for the language (Polish or English; the Locale language is the default).
+; This file is kept in UTF-8 in the repository; tools/make_release.py writes it in ISO-8859-2.
 ;
 ; Asks: where to install the program, where to keep the synchronised files, the OneDrive
 ; folder, the character set, the interval, both ways or download only, the Workbench
@@ -11,6 +11,17 @@
 
 (set #pl (= @language "polski"))
 (set #version "0.4.2")
+
+; the language of the installer: the Locale language is only the default
+(set #pl
+  (= 0 (askchoice
+         (prompt "Język instalatora / Language of the installer:")
+         (help (cat "Pytania i komunikaty instalatora będą w wybranym języku (opisy AmiDrive po polsku "
+                    "i angielsku są instalowane zawsze).\n\nThe questions and messages of the installer "
+                    "will be in the chosen language (the AmiDrive documentation is installed in both "
+                    "Polish and English)."))
+         (choices "Polski" "English")
+         (default (if #pl 0 1)))))
 
 (if (< (/ @installer-version 65536) 43)
   (abort "Installer 43 or newer is needed (AmigaOS 3.1.4 / 3.2 / 3.9)."))

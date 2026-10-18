@@ -282,7 +282,8 @@ def content():
         "wskazującym program (<font name='Consolas'>tools/make_icon.py --project</font>). "
         "Żeby po starcie AmiDrive czekał na <i>Sync now</i>: <font name='Consolas'>AmiDrive PAUSE=YES</font>.",
     ], 6)]
-    s.append(P("Instalator (<i>Install-AmiDrive</i>) pyta o to wszystko sam: o szufladę programu, "
+    s.append(P("Instalator (<i>Install-AmiDrive</i>) pyta o to wszystko sam (najpierw o język: polski "
+               "lub angielski): o szufladę programu, "
                "katalog na pliki, folder w OneDrive, stronę kodową, częstotliwość, kierunek, ikonę "
                "„OneDrive”, zegar, strefę czasową, autostart i o to, co robić po uruchomieniu "
                "(synchronizować od razu albo czekać w pauzie do <i>Sync now</i>).", body))
@@ -582,7 +583,8 @@ def content_en():
         "pointing at the program (<font name='Consolas'>tools/make_icon.py --project</font>). "
         "To make AmiDrive wait for <i>Sync now</i> after the start: <font name='Consolas'>AmiDrive PAUSE=YES</font>.",
     ], 6)]
-    s.append(P("The installer (<i>Install-AmiDrive</i>) asks for all of this by itself: the program "
+    s.append(P("The installer (<i>Install-AmiDrive</i>) asks for all of this by itself (first for its "
+               "language: Polish or English): the program "
                "drawer, the directory for the files, the OneDrive folder, the character set, how often "
                "to check, the direction, the “OneDrive” icon, the clock, the time zone, the autostart "
                "and what to do after the start (synchronise at once or wait paused until "

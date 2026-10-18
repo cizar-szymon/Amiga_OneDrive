@@ -12,6 +12,7 @@ dziennik <szuflada z plikami>/.AmiDrive/AmiDrive.log (nie zawiera tokenów).
   Ustawienie zapamiętywane (AmiDrive PAUSE=YES w Shellu albo Tool Type).
   Instalator pyta o to zawsze (domyślnie obecne ustawienie).
 - Opis PDF także po angielsku: Docs/AmiDrive-description.pdf.
+- Instalator najpierw pyta o język (polski / angielski).
 
 0.4.1 (14.10.2026)
 ------------------
