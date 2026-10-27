@@ -160,6 +160,26 @@ TCP dają ponad 1,5 MB/s. TLS 1.3: oferowane tylko `TLS_CHACHA20_POLY1305_SHA256
 TLS 1.2: ECDHE z ChaCha20 / AES-GCM. Nawiązanie połączenia 2,7–12 s (RSA/ECDHE na 68060),
 dlatego keep-alive.
 
+### Amiga 2 z WarpSSL (27.10.2026)
+
+Druga A1200 (`amiagent-2.cfg`): 68060, warpSOCKET 30.66 (CS-Lab), AmiSSL 5.24 w wersji
+os3-68060 i `C:WarpSSL` 1.0 (23.10.26). WarpSSL dodaje do AmiSSL provider `warp`, który
+liczy AES-GCM, ChaCha20-Poly1305, X25519 i ECDSA na procesorze ARM karty Warp. AmiDrive 0.4.2
+działa z nim bez zmian w kodzie.
+
+| Pomiar | ostatnie testy (14.10, AmiSSL) | WarpSSL (27.10) |
+|---|---|---|
+| `openssl speed` AES-128-GCM, 16 KB | 298 KB/s | 4120 KB/s (13,8×) |
+| `openssl speed` AES-256-GCM | 261 KB/s | 4099 KB/s (15,7×) |
+| `openssl speed` ChaCha20-Poly1305 | 458 KB/s | 4354 KB/s (9,5×) |
+| `AmiDrive TEST`, nawiązanie TLS z Graph | ok. 2,3 s | 1,58 s |
+| `AmiDrive TEST`, drugie zapytanie na tym samym połączeniu | 80 ms | 60 ms |
+| `TEST URL=` cachefly 5 MB, https ChaCha20 | 337 KB/s | 1333–1471 KB/s (ok. 4×) |
+| nawiązanie TLS z cachefly | 2,7 s i więcej | 0,56 s |
+| to samo, http (bez TLS) | 1590 KB/s | 1254–1326 KB/s |
+
+Wniosek: z WarpSSL https jest tak samo szybkie jak http, ogranicza już sieć, a nie szyfrowanie.
+
 ## Decyzje
 
 - **Tryb pracy (użytkownik, 13.10.2026):** domyślnie praca w tle, sprawdzanie zmian co 3 min
